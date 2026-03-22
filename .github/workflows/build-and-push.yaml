@@ -1,11 +1,11 @@
-name: build-on-commit
+name: build-and-push
 
 on:
   workflow_dispatch:
 # push:
 #   paths:
 #     - Makefile
-#     - '.github/workflows/build-on-commit.yaml'
+#     - '.github/workflows/build-and-push.yaml'
 
 permissions:
   packages: write
@@ -18,6 +18,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    -
+      name: Install checkmake
+      run: go install github.com/mrtazz/checkmake/cmd/checkmake@latest && echo "$HOME/go/bin" >> $GITHUB_PATH
+    -
+      name: Lint Makefile
+      run: make test
     -
       name: Install crane
       run: |

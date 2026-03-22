@@ -36,7 +36,7 @@ endif
 CHANNELS := stable long-term testing development
 ARCHS := arm arm64 mipsbe mmips smips ppc tile x86
 
-.PHONY: run all service download clean nothing dump $(CHANNELS) $(ARCHS)
+.PHONY: run all service download clean nothing dump test $(CHANNELS) $(ARCHS)
 .PHONY: image image-all image-platform image-push image-clean vm-run
 .SUFFIXES:
 
@@ -86,6 +86,9 @@ all: $(ROUTEROS_FILES) $(DLDIR)/netinstall-cli-$(VER_NETINSTALL) $(ALL_PACKAGES_
 
 dump:
 	@echo ARCH=$(ARCH) VER=$(VER) CHANNEL=$(CHANNEL) PLATFORM=$(PLATFORM) OS=$(OS) QEMU=$(QEMU) QEMU_SYSTEM=$(QEMU_SYSTEM) $(if $(MODESCRIPT),MODESCRIPT="$(MODESCRIPT)")
+
+test:
+	checkmake Makefile
 
 clean:
 	rm -rf $(DLDIR) images .image-build .vm-build .modescript.rsc .vm-cmd.sh
