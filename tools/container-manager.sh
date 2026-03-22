@@ -1,5 +1,5 @@
 #!/bin/sh
-# routeros-setup.sh — Provision and manage netinstall container on RouterOS via REST API
+# container-manager.sh — Provision and manage netinstall container on RouterOS via REST API
 # Requires: curl, jq, RouterOS 7.22+ (REST API property names changed in 7.22)
 set -e
 
@@ -29,7 +29,7 @@ GW_ADDR=172.17.9.1/24
 # --- Usage ---
 usage() {
   cat <<'EOF'
-Usage: routeros-setup.sh <command> [options]
+Usage: container-manager.sh <command> [options]
 
 Commands:
   setup    Create VETH, bridge, envs, and container on RouterOS
@@ -63,9 +63,9 @@ Credentials are resolved in order: env vars (ROS_USER/ROS_PASS),
 macOS Keychain / Linux secret-tool, then interactive prompt.
 
 First-time setup — store credentials in keychain:
-  routeros-setup.sh credentials -r 192.168.74.1 -P 7080 -S http
+  container-manager.sh credentials -r 192.168.74.1 -P 7080 -S http
 After that, only the router address and port are needed:
-  routeros-setup.sh status -r 192.168.74.1 -P 7080 -S http
+  container-manager.sh status -r 192.168.74.1 -P 7080 -S http
 EOF
   exit 1
 }

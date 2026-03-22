@@ -1,5 +1,5 @@
 ---
-description: "Use when editing shell scripts (.sh) or Makefile shell recipes — covers POSIX portability, RouterOS REST API patterns, and routeros-setup.sh conventions."
+description: "Use when editing shell scripts (.sh) or Makefile shell recipes — covers POSIX portability, RouterOS REST API patterns, and container-manager.sh conventions."
 applyTo: "**/*.sh"
 ---
 # Shell Script Conventions
@@ -11,7 +11,7 @@ applyTo: "**/*.sh"
 - Quote variables: `"$var"` not `$var`
 - Use `command -v` not `which` for checking executables
 - Makefile recipes: prefer `wget` over `curl` (busybox includes wget)
-- Standalone scripts (e.g. `routeros-setup.sh`): `curl` is fine — it's a stated dependency
+- Standalone scripts (e.g. `tools/container-manager.sh`): `curl` is fine — it's a stated dependency
 
 ## dash-Specific Gotchas (GitHub Actions `/bin/sh`)
 
@@ -25,7 +25,7 @@ GitHub Actions uses `dash` as `/bin/sh`. dash is stricter than bash in ways that
 - **Process substitution `<()`**: bash-only, not available in dash
 - Test locally with: `shellcheck --shell=dash script.sh`
 
-## `routeros-setup.sh` Specifics
+## `tools/container-manager.sh` Specifics
 
 - Requires `curl`, `jq`, and RouterOS 7.22+
 - Uses RouterOS REST API (`/rest/` prefix):

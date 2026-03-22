@@ -10,7 +10,7 @@ This project wraps MikroTik's `netinstall-cli` binary in a `Makefile` to automat
 
 The entire "application logic" lives in `Makefile`. OCI images are built with `make image` using `crane` (no Docker required), producing a single-layer Docker v1 tar. A traditional `Dockerfile` is also provided as an alternative for users who prefer `docker build`.
 
-**This is a Makefile-based project — not Node.js/Bun/npm.** Ignore any parent-level instructions about defaulting to Bun. Core tools: GNU `make`, `wget`, `unzip`, and standard POSIX utilities. Image building adds `crane`. The `routeros-setup.sh` script uses `curl` and `jq`. On macOS, all are available via `brew`. Future post-install orchestration may use `bun`, but the Makefile core will remain.
+**This is a Makefile-based project — not Node.js/Bun/npm.** Ignore any parent-level instructions about defaulting to Bun. Core tools: GNU `make`, `wget`, `unzip`, and standard POSIX utilities. Image building adds `crane`. The `tools/container-manager.sh` script uses `curl` and `jq`. On macOS, all are available via `brew`. Future post-install orchestration may use `bun`, but the Makefile core will remain.
 
 GitHub repo: `tikoci/netinstall` — DockerHub image: `ammo74/netinstall` — License: CC0 1.0 (public domain).
 
@@ -48,21 +48,21 @@ make dump
 make nothing
 ```
 
-### `routeros-setup.sh` — Automated RouterOS container provisioning
+### `tools/container-manager.sh` — RouterOS container provisioning & lifecycle
 
 ```sh
 # Store credentials in system keychain (macOS Keychain / Linux secret-tool)
-./routeros-setup.sh credentials -r 192.168.74.1 -P 7080 -S http
+./tools/container-manager.sh credentials -r 192.168.74.1 -P 7080 -S http
 
 # Full setup: creates VETH, bridge, envs, builds+uploads image, creates container
-./routeros-setup.sh setup -r 192.168.74.1 -P 7080 -S http -d disk1 -p ether5
+./tools/container-manager.sh setup -r 192.168.74.1 -P 7080 -S http -d disk1 -p ether5
 
 # Lifecycle commands
-./routeros-setup.sh start  -r 192.168.74.1 -P 7080 -S http
-./routeros-setup.sh status -r 192.168.74.1 -P 7080 -S http
-./routeros-setup.sh logs   -r 192.168.74.1 -P 7080 -S http
-./routeros-setup.sh stop   -r 192.168.74.1 -P 7080 -S http
-./routeros-setup.sh remove -r 192.168.74.1 -P 7080 -S http
+./tools/container-manager.sh start  -r 192.168.74.1 -P 7080 -S http
+./tools/container-manager.sh status -r 192.168.74.1 -P 7080 -S http
+./tools/container-manager.sh logs   -r 192.168.74.1 -P 7080 -S http
+./tools/container-manager.sh stop   -r 192.168.74.1 -P 7080 -S http
+./tools/container-manager.sh remove -r 192.168.74.1 -P 7080 -S http
 ```
 
 ## Makefile Variable Reference
@@ -143,9 +143,9 @@ Architecture mapping (RouterOS → Docker platform):
 - `arm64` → `linux/arm64`
 - `x86` → `linux/amd64`
 
-## `routeros-setup.sh` — Container Provisioning
+## `tools/container-manager.sh` — Container Provisioning & Lifecycle
 
-Shell script that provisions the full netinstall container stack on a RouterOS device via REST API. Requires `curl`, `jq`, and **RouterOS 7.22+** (uses 7.22+ REST API property names). The Makefile and container images themselves work on any RouterOS version that supports `/container`. Creates VETH, bridge, bridge ports, firewall list member, env vars, and container.
+Shell script that provisions and manages the netinstall container on a RouterOS device via REST API. Requires `curl`, `jq`, and **RouterOS 7.22+** (uses 7.22+ REST API property names). The Makefile and container images themselves work on any RouterOS version that supports `/container`. Creates VETH, bridge, bridge ports, firewall list member, env vars, and container. Also provides start/stop/status/logs/remove lifecycle commands.
 
 Key behaviors:
 - **Image handling**: Checks for pre-built image in `images/`, builds with `make image-platform` if crane is available, otherwise errors with suggestion to run `make image`.
@@ -163,15 +163,15 @@ The REST API (`/rest/` prefix) has several differences from CLI syntax that trip
 - **Property names differ from CLI (pre-7.22)**:
   - Container `envlists` (REST/7.22+ CLI) vs `envlist` (pre-7.22 CLI) — note the trailing `s`
   - Env list `list` (REST/7.22+ CLI) vs `name` (pre-7.22 CLI) — the field that names the env list
-  - RouterOS 7.22 unified most REST and CLI property names; `routeros-setup.sh` requires 7.22+
+  - RouterOS 7.22 unified most REST and CLI property names; `tools/container-manager.sh` requires 7.22+
 - **Container status**: Use `.running` field (`"true"`/`"false"` as strings). There is no `.stopped` field.
 - **RouterOS 7.21+**: Container interface names match the VETH name. Set `IFACE` env var to the VETH name (e.g., `veth-netinstall`).
 - **Container delete**: Must fully stop first. A delete while still stopping returns HTTP 400. Poll `.running` and retry.
 - **Auto-detection**: Scheme (http/https) and port can be probed by trying common endpoints.
 
-## `examples/builder/`
+## `tools/docker/`
 
-Contains Dockerfiles and scripts for building custom OCI images with pre-downloaded packages. Key detail: `build.sh` maps RouterOS architectures to Docker platform strings (same mapping as above).
+Contains Dockerfiles and scripts for building custom OCI images with pre-downloaded packages via `docker buildx`. Key detail: `build.sh` maps RouterOS architectures to Docker platform strings (same mapping as above). This is the Docker-based alternative to the crane-based `make image`.
 
 ## macOS VM Support (QEMU system emulation)
 
@@ -216,7 +216,7 @@ Contains Dockerfiles and scripts for building custom OCI images with pre-downloa
 
 ## CI/CD
 
-- `build-on-commit.yaml`: Manual dispatch only. Uses `crane` (installed via `go install`) to build multi-platform images with `make image`. Pushes to DockerHub (`ammo74/netinstall`) and GHCR (`ghcr.io/tikoci/netinstall`) — note the CI explicitly overrides `IMAGE=` for each registry, so the Makefile default (`tikoci/netinstall`) doesn't affect CI pushes.
+- `build-and-push.yaml`: Manual dispatch only. Uses `crane` (installed via `go install`) to build multi-platform images with `make image`. Pushes to DockerHub (`ammo74/netinstall`) and GHCR (`ghcr.io/tikoci/netinstall`) — note the CI explicitly overrides `IMAGE=` for each registry, so the Makefile default (`tikoci/netinstall`) doesn't affect CI pushes.
 - `repo-as-web.yaml`: Triggers on push to `master`. Deploys repo to GitHub Pages and updates DockerHub description from `README.md`.
 
 ## MikroTik `/container` Quick Reference

@@ -4,7 +4,7 @@
 
 A `Makefile` + `Dockerfile` wrapper around MikroTik's `netinstall-cli` binary for automated RouterOS device flashing. Used either directly on Linux/macOS or as a MikroTik RouterOS `/container`.
 
-**This is a Makefile-based project — not Node.js/Bun/npm.** Core tools: GNU `make`, `wget`, `unzip`, and standard POSIX utilities. Image building adds `crane`. The `routeros-setup.sh` script uses `curl` and `jq`. On macOS, all are available via `brew`.
+**This is a Makefile-based project — not Node.js/Bun/npm.** Core tools: GNU `make`, `wget`, `unzip`, and standard POSIX utilities. Image building adds `crane`. The `tools/container-manager.sh` script uses `curl` and `jq`. On macOS, all are available via `brew`.
 
 GitHub repo: `tikoci/netinstall` — DockerHub: `ammo74/netinstall` — License: CC0 1.0 (public domain).
 
@@ -14,7 +14,10 @@ GitHub repo: `tikoci/netinstall` — DockerHub: `ammo74/netinstall` — License:
 
 - **`Makefile`** — all logic lives here: downloads `netinstall-cli` (x86 binary from MikroTik), downloads RouterOS `.npk` packages for the target architecture, invokes `netinstall-cli` with constructed args. OCI images are also built here via `make image` using `crane` (no Docker required).
 - **`Dockerfile`** — Alpine Linux + `make` + `qemu-i386-static` (copied from Debian build stage). Kept for compatibility with users who prefer `docker build`; CI and primary builds use `make image` (crane).
-- **`routeros-setup.sh`** — shell script that provisions the full netinstall container stack on a RouterOS device via REST API. Requires `curl`, `jq`, and RouterOS 7.22+.
+- **`tools/container-manager.sh`** — shell script that provisions and manages the netinstall container on a RouterOS device via REST API (setup/start/stop/status/logs/remove). Requires `curl`, `jq`, and RouterOS 7.22+.
+- **`tools/container-setup.rsc`** — manual RouterOS CLI equivalent of the setup steps (reference/educational).
+- **`tools/docker/`** — Dockerfiles and scripts for building custom OCI images with pre-downloaded packages via `docker buildx`.
+- **`mknetinstall`** — interactive POSIX sh wizard for guided netinstall setup on macOS/Linux.
 
 QEMU is needed because `netinstall-cli` is an i386-only binary; it's skipped automatically on x86_64 hosts via `uname -m` check in Makefile.
 
@@ -72,9 +75,9 @@ netinstall-cli [-r|-e] [-b] [-m [-o]] [-f] [-v] [-c] [--mac <mac>]
 
 Architecture mapping (RouterOS → Docker platform): `arm`→`linux/arm/v7`, `arm64`→`linux/arm64`, `x86`→`linux/amd64`
 
-## `routeros-setup.sh` — Container Provisioning
+## `tools/container-manager.sh` — Container Provisioning & Lifecycle
 
-Automates the full netinstall container stack on a RouterOS device via REST API: creates VETH, bridge, environment variables, builds image, uploads via SCP, creates container.
+Provisions and manages the netinstall container stack on a RouterOS device via REST API: creates VETH, bridge, environment variables, builds image, uploads via SCP, creates container.
 
 Requires RouterOS 7.22+ (uses 7.22+ REST API property names). Key REST API notes:
 - HTTP verbs: PUT = create, PATCH = update, POST = command, DELETE = remove
