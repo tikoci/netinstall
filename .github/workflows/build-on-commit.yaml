@@ -4,12 +4,8 @@ on:
   workflow_dispatch:
 # push:
 #   paths:
-#     - Dockerfile
 #     - Makefile
 #     - '.github/workflows/build-on-commit.yaml'
-
-env:
-  PLATFORMS: linux/arm/v7,linux/arm64,linux/amd64
 
 permissions:
   packages: write
@@ -19,53 +15,33 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
     -
-      name: Set up QEMU need for cross-platform building
-      uses: docker/setup-qemu-action@v3
-      with:
-        platforms: ${{ env.PLATFORMS }}
+      name: Install crane
+      run: |
+        go install github.com/google/go-containerregistry/cmd/crane@latest
+        echo "$HOME/go/bin" >> $GITHUB_PATH
     -
-      name: Set up for "docker buildx"
-      uses: docker/setup-buildx-action@v3
-      with:
-        platforms: ${{ env.PLATFORMS }}
+      name: Login to registries
+      run: |
+        crane auth login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+        crane auth login index.docker.io -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
     -
-      name: Login to GitHub's container registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      name: Build all platform images
+      run: make image
     -
-      name: Login to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-    - 
-      name: Add README to Docker Hub
+      name: Push to DockerHub
+      run: make image-push IMAGE=ammo74/netinstall
+    -
+      name: Push to GHCR
+      run: make image-push IMAGE=ghcr.io/${{ github.repository }}
+    -
+      name: Update DockerHub description
       uses: peter-evans/dockerhub-description@v4
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
         repository: ammo74/netinstall
-        short-description: "RouterOS /container for running netinstall to flash Mikrotik devices on ARM/ARM64/X86"
-    - 
-      name: Build image and push image to ghcr.io
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        sbom: false
-        provenance: false
-        platforms: ${{ env.PLATFORMS }}
-        tags: |
-          ghcr.io/${{ github.repository }}:latest
-          ammo74/netinstall:latest
-        build-args: |
-          GHCR_REPO=${{ github.repository }}
-          GHCR_TAG=${{ steps.meta.outputs.tags }}
-          GHCR_PLATFORMS=${{ env.PLATFORMS }}
+        short-description: "RouterOS /container for running netinstall to flash MikroTik devices on ARM/ARM64/X86"

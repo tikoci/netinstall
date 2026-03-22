@@ -1,0 +1,32 @@
+# This file uses gitignore syntax, not markdown.
+.markdownlintignore
+
+# LLM agent instruction/prompt files — not user-facing rendered markdown.
+# These have a different audience (models, not humans reading rendered docs)
+# and intentionally use patterns linters flag (long lines, XML-like tags, etc).
+# Full ignore is appropriate; partial rule application requires cli2 config.
+
+# Claude Code
+CLAUDE.md
+
+# GitHub Copilot
+.github/copilot-instructions.md
+.github/instructions/
+
+# Cursor
+.cursor/rules/
+
+# Windsurf
+.windsurf/rules/
+
+# OpenAI Codex
+AGENTS.md
+
+# Cline
+.cline/rules/
+
+# Roo Code
+.roo/rules/
+
+# Amazon Q
+.amazonq/rules/

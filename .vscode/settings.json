@@ -1,0 +1,17 @@
+{
+  "files.associations": {
+    "Makefile": "makefile"
+  },
+  "files.insertFinalNewline": true,
+  "editor.insertSpaces": false,
+  "editor.detectIndentation": true,
+  "[makefile]": {
+    "editor.insertSpaces": false,
+    "editor.tabSize": 8
+  },
+  "[shellscript]": {
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  },
+  "github.copilot.chat.codeGeneration.useInstructionFiles": true
+}

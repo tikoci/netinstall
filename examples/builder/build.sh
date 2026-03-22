@@ -4,7 +4,7 @@ set -e
 ROSARCH_DEFAULT="arm64 arm x86"
 IMAGE=netinstall
 
-ROSARCHARGS=${@:1}
+ROSARCHARGS="$*"
 ROSARCH=${ROSARCH:-${ROSARCHARGS:-$ROSARCH_DEFAULT}}
 echo "Starting platform-specific build using $ROSARCH"
 for rosarch in $ROSARCH; do 
@@ -14,11 +14,11 @@ for rosarch in $ROSARCH; do
     arm64) PLATFORMS=linux/arm64 ;;
     arm) PLATFORMS=linux/arm/v7 ;;
     x86) PLATFORMS=linux/amd64 ;;
-    *) echo "Bad platform: $rosarch"; exit -1 ;;
+    *) echo "Bad platform: $rosarch"; exit 1 ;;
   esac
 
   echo "Build OCI with single, specific-platform using tag $TAG"
-  source ./build-multi.sh
+  . ./build-multi.sh
 
-  echo "\tCompleted. Built $PLATFORMS platform-specific image: $(pwd)$TAG.tar"
+  printf '\tCompleted. Built %s platform-specific image: %s%s.tar\n' "$PLATFORMS" "$(pwd)" "$TAG"
 done
