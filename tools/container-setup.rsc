@@ -1,4 +1,4 @@
-
+# IMPORTANT: change thise for your router:
 
 :global diskprefix "disk1"
 :global bridgeport "ether5"
@@ -16,7 +16,7 @@
 
 # Add veth and physical port, _e.g._ "ether5", to the newly created bridge: 
 
-    /interface bridge port [find interface=$bridgeport] bridge=bridge-netinstall interface=$bridgeport
+    /interface bridge port set  [find interface=$bridgeport] bridge=bridge-netinstall interface=$bridgeport
 
     # **OR** if not part of bridge, add port to netinstall bridge
     #        /interface bridge port add bridge=bridge-netinstall interface=$bridgeport
@@ -31,10 +31,12 @@
 
 # Create some environment variables to control `netinstall` operation – adjusting all `value=` as needed:
 
-    /container envs add key=ARCH name=NETINSTALL value=arm64
-    /container envs add key=CHANNEL name=NETINSTALL value="testing"
-    /container envs add key=PKGS name=NETINSTALL value="wifi-qcom"
-    /container envs add key=OPTS name=NETINSTALL value="-b -r" comment=" use EITHER -r to reset to defaults or -e for an empty config; use -b to remove any branding"
+    # NOTE: env var in version 7.21 and above list= is used, older version used name=
+    #.  for older versions, edit this script to use name, or use a recent RouterOS version 
+    /container envs add key=ARCH list=NETINSTALL value=arm64
+    /container envs add key=CHANNEL list=NETINSTALL value="testing"
+    /container envs add key=PKGS list=NETINSTALL value="wifi-qcom"
+    /container envs add key=OPTS list=NETINSTALL value="-b -r" comment=" use EITHER -r to reset to defaults or -e for an empty config; use -b to remove any branding"
    
 # The `registry-url` is used to fetch "pull" images. 
     
@@ -46,7 +48,7 @@
 
 # Create the container.  This assumes DockerHub is used:
         
-    /container add remote-image=ammo74/netinstall:latest envlist=NETINSTALL interface=veth-netinstall logging=yes workdir=/app root-dir=$diskprefix/root-netinstall
+    /container add remote-image=ammo74/netinstall:latest envlist=NETINSTALL interface=veth-netinstall logging=yes workdir=/app root-dir="$diskprefix/root-netinstall"
 
 # Wait for download and extract - this may take a minute or so
 

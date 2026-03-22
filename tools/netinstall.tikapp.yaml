@@ -1,0 +1,19 @@
+name: mknetinstall
+descr: netinstall-cli in a container - just set the env variables, configure the bridge, rest is automatic                    
+page: https://github.com/tikoci/netinstall
+category: networking
+services:
+  netinstall:                                                           
+    image: ghcr.io/tikoci/netinstall:latest
+    environment:                                                        
+      ARCH: arm                                           
+      PKGS: wifi-qcom-ac
+      CHANNEL: stable
+      OPTS: "-b -r"
+      IFACE: "[containerInterface]"
+    volumes:                                                            
+      - netinstall-packages:/app/packages
+# network: 
+  # this is manual setup to use seperate bridge with ports needed for netinstall
+  #   /app YAML does not have a way to express using a seperate bridge 
+  #   other than "internal" which does not work for netinstall 
