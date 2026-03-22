@@ -36,7 +36,7 @@ endif
 CHANNELS := stable long-term testing development
 ARCHS := arm arm64 mipsbe mmips smips ppc tile x86
 
-.PHONY: run all service download clean nothing dump test $(CHANNELS) $(ARCHS)
+.PHONY: run all service download clean nothing dump test wizard mknetinstall $(CHANNELS) $(ARCHS)
 .PHONY: image image-all image-platform image-push image-clean vm-run
 .SUFFIXES:
 
@@ -89,6 +89,20 @@ dump:
 
 test:
 	checkmake Makefile
+
+wizard:
+	@./mknetinstall
+
+mknetinstall:
+	@if [ "$$(id -u)" = "0" ]; then \
+	  _dest=/usr/local/bin; \
+	else \
+	  _dest=$$HOME/.local/bin; \
+	  mkdir -p "$$_dest"; \
+	fi; \
+	cp mknetinstall "$$_dest/mknetinstall"; \
+	chmod +x "$$_dest/mknetinstall"; \
+	echo "Installed mknetinstall to $$_dest/mknetinstall"
 
 clean:
 	rm -rf $(DLDIR) images .image-build .vm-build .modescript.rsc .vm-cmd.sh

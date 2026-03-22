@@ -1,0 +1,559 @@
+#!/bin/sh
+# mknetinstall — Interactive wizard for MikroTik netinstall
+# Collects user choices, then invokes make with the right ENV variables.
+# POSIX sh compatible: works with dash, busybox ash, zsh-as-sh.
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CHANNELS="stable testing long-term development"
+ARCHS="arm arm64 mipsbe mmips smips ppc tile x86"
+DLDIR="downloads"
+URLVER="https://upgrade.mikrotik.com/routeros/NEWESTa7"
+
+# Wizard state (W_ prefix)
+W_CHANNEL="" W_VER="" W_ARCH="" W_PKGS="" W_OPTS=""
+W_IFACE="" W_TARGET="" W_MODESCRIPT=""
+
+# CLI overrides (CLI_ prefix)
+CLI_ARCH="" CLI_CHANNEL="" CLI_VER="" CLI_PKGS="" CLI_IFACE="" CLI_MODE=""
+CLI_DRY_RUN=""
+
+# Detected platform
+HOST_OS="" HOST_ARCH=""
+
+# ---------------------------------------------------------------------------
+# Usage
+# ---------------------------------------------------------------------------
+usage() {
+  cat <<'USAGE'
+Usage: mknetinstall [OPTIONS]
+
+Interactive wizard for MikroTik netinstall. Guides you through selecting
+architecture, packages, device mode, network interface, and run mode,
+then invokes `make` with the correct variables.
+
+Options:
+  --arch ARCH       Target architecture(s), space-separated (e.g., "arm64 x86")
+  --channel CHAN    Version channel: stable, testing, long-term, development
+  --ver VERSION     Pin a specific RouterOS version (e.g., 7.22)
+  --pkgs PKGS       Extra packages, space-separated (e.g., "container wifi-qcom-ac")
+  --iface IFACE     Network interface (e.g., en5 on macOS, eth0 on Linux)
+  --run             Run netinstall once (skip run-mode prompt)
+  --service         Run netinstall as a service loop (skip run-mode prompt)
+  --dry-run         Show the make command without executing it
+  -h, --help        Show this help message
+
+Examples:
+  ./mknetinstall                              # Full interactive wizard
+  ./mknetinstall --arch arm64 --channel stable --dry-run
+  ./mknetinstall --arch "arm arm64" --pkgs "container wifi-qcom-ac" --iface en5
+USAGE
+}
+
+# ---------------------------------------------------------------------------
+# Utility functions
+# ---------------------------------------------------------------------------
+print_header() {
+  printf "\n\033[1m--- %s ---\033[0m\n\n" "$1"
+}
+
+print_note() {
+  printf "  * %s\n" "$1"
+}
+
+# Version comparison: returns 0 (true) if $1 >= $2 (major.minor)
+ver_ge() {
+  echo "$1 $2" | awk -F'[. ]' '{exit !($1>$3||$1==$3&&$2>=$4)}'
+}
+
+# Fetch version string for a channel, retry up to 5 times
+resolve_version() {
+  _ch="$1"
+  _i=0
+  while [ "$_i" -lt 5 ]; do
+    _v=$(wget -q -O - "$URLVER.$_ch" 2>/dev/null) || true
+    if [ -n "$_v" ]; then
+      echo "$_v" | awk '{print $1}'
+      return 0
+    fi
+    _i=$((_i + 1))
+    sleep 2
+  done
+  return 1
+}
+
+# ---------------------------------------------------------------------------
+# Selection UI
+# ---------------------------------------------------------------------------
+
+# single_select PROMPT DEFAULT OPTION1 OPTION2 ...
+# Prints selected value to stdout. Prompts on stderr.
+single_select() {
+  _prompt="$1"; shift
+  _default="$1"; shift
+  _n=0
+  _default_n=""
+  for _opt in "$@"; do
+    _n=$((_n + 1))
+    _marker=""
+    if [ "$_opt" = "$_default" ]; then
+      _marker=" (default)"
+      _default_n=$_n
+    fi
+    printf "  %d) %s%s\n" "$_n" "$_opt" "$_marker" >&2
+  done
+  printf "\n%s [%s]: " "$_prompt" "${_default_n:-1}" >&2
+  read -r _choice
+  if [ -z "$_choice" ]; then
+    echo "$_default"
+    return
+  fi
+  _n=0
+  for _opt in "$@"; do
+    _n=$((_n + 1))
+    if [ "$_n" = "$_choice" ]; then
+      echo "$_opt"
+      return
+    fi
+  done
+  printf "  Invalid choice, using default: %s\n" "$_default" >&2
+  echo "$_default"
+}
+
+# multi_select PROMPT OPTION1 OPTION2 ...
+# Returns space-separated selected values on stdout. Prompts on stderr.
+multi_select() {
+  _prompt="$1"; shift
+  _n=0
+  for _opt in "$@"; do
+    _n=$((_n + 1))
+    printf "  %d) %s\n" "$_n" "$_opt" >&2
+  done
+  printf "\n%s: " "$_prompt" >&2
+  read -r _choices
+  if [ -z "$_choices" ]; then
+    return
+  fi
+  _result=""
+  for _chosen in $_choices; do
+    _n=0
+    for _opt in "$@"; do
+      _n=$((_n + 1))
+      if [ "$_n" = "$_chosen" ]; then
+        if [ -n "$_result" ]; then
+          _result="$_result $_opt"
+        else
+          _result="$_opt"
+        fi
+      fi
+    done
+  done
+  echo "$_result"
+}
+
+# ---------------------------------------------------------------------------
+# Platform detection
+# ---------------------------------------------------------------------------
+detect_os() {
+  HOST_OS=$(uname -s)
+  HOST_ARCH=$(uname -m)
+  printf "  Platform: %s %s\n" "$HOST_OS" "$HOST_ARCH"
+}
+
+check_prereqs() {
+  _missing=""
+  for _tool in make wget unzip; do
+    if ! command -v "$_tool" >/dev/null 2>&1; then
+      _missing="$_missing $_tool"
+    fi
+  done
+  if [ "$HOST_OS" = "Darwin" ]; then
+    if ! command -v qemu-system-x86_64 >/dev/null 2>&1; then
+      _missing="$_missing qemu-system-x86_64"
+    fi
+  fi
+  if [ -n "$_missing" ]; then
+    printf "\n  Missing required tools:%s\n\n" "$_missing"
+    if [ "$HOST_OS" = "Darwin" ]; then
+      _brew_pkgs=$(echo "$_missing" | sed 's/qemu-system-x86_64/qemu/')
+      printf "  Install with: brew install%s\n" "$_brew_pkgs"
+    else
+      printf "  Install with your package manager (apt, apk, dnf, etc.)\n"
+    fi
+    exit 1
+  fi
+  printf "  All required tools found.\n"
+}
+
+detect_interfaces() {
+  if [ "$HOST_OS" = "Darwin" ]; then
+    networksetup -listallhardwareports 2>/dev/null | awk '
+      /^Hardware Port:/ { port=$0; sub(/^Hardware Port: /, "", port) }
+      /^Device:/ {
+        dev=$2
+        if (dev !~ /^(lo|bridge|utun|awdl|llw|ap|gif|stf|feth|anpi|XHC)/)
+          print dev " (" port ")"
+      }
+    '
+  else
+    for _iface_path in /sys/class/net/*; do
+      _name="${_iface_path##*/}"
+      case "$_name" in
+        lo|docker*|veth*|br-*|virbr*) continue ;;
+      esac
+      printf "%s\n" "$_name"
+    done
+  fi
+}
+
+# extract_packages VER ARCH
+# Lists available package names from downloaded NPK files
+extract_packages() {
+  _ver="$1"
+  _arch="$2"
+  _first_arch="${_arch%% *}"
+  for _f in "$SCRIPT_DIR/$DLDIR"/*-"$_ver"-"$_first_arch".npk; do
+    [ -f "$_f" ] || continue
+    _base="${_f##*/}"
+    _base="${_base%.npk}"
+    _pkg=$(echo "$_base" | sed "s/-${_ver}-${_first_arch}$//")
+    [ "$_pkg" = "routeros" ] && continue
+    echo "$_pkg"
+  done | sort
+}
+
+# ---------------------------------------------------------------------------
+# CLI argument parsing
+# ---------------------------------------------------------------------------
+parse_args() {
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --arch)    CLI_ARCH="$2"; shift 2 ;;
+      --channel) CLI_CHANNEL="$2"; shift 2 ;;
+      --ver)     CLI_VER="$2"; shift 2 ;;
+      --pkgs)    CLI_PKGS="$2"; shift 2 ;;
+      --iface)   CLI_IFACE="$2"; shift 2 ;;
+      --run)     CLI_MODE="run"; shift ;;
+      --service) CLI_MODE="service"; shift ;;
+      --dry-run) CLI_DRY_RUN=1; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *)         printf "Unknown option: %s\n" "$1" >&2; usage >&2; exit 1 ;;
+    esac
+  done
+}
+
+# ---------------------------------------------------------------------------
+# Main wizard
+# ---------------------------------------------------------------------------
+main() {
+  parse_args "$@"
+
+  printf "\n\033[1mMikroTik Netinstall Wizard\033[0m\n"
+
+  # -- Step 0: Platform Detection --
+  print_header "Platform Detection"
+  detect_os
+  check_prereqs
+  printf "\n"
+  if [ "$HOST_OS" = "Darwin" ]; then
+    print_note "Netinstall runs inside a QEMU VM with bridged networking."
+    print_note "Your macOS password will be required for sudo."
+  elif [ "$HOST_ARCH" != "x86_64" ]; then
+    print_note "QEMU user-mode emulation will run the x86 netinstall-cli binary."
+  else
+    print_note "Netinstall will run natively. sudo is required for BOOTP/TFTP ports."
+  fi
+
+  # -- Step 1: Version Channel --
+  print_header "Step 1: Version Channel"
+  if [ -n "$CLI_VER" ]; then
+    W_VER="$CLI_VER"
+    printf "  Using pinned version: %s\n" "$W_VER"
+  elif [ -n "$CLI_CHANNEL" ]; then
+    W_CHANNEL="$CLI_CHANNEL"
+    printf "  Resolving %s channel... " "$W_CHANNEL"
+    W_VER=$(resolve_version "$W_CHANNEL") || {
+      printf "FAILED\n  Could not resolve version for channel: %s\n" "$W_CHANNEL" >&2
+      exit 1
+    }
+    printf "%s\n" "$W_VER"
+  elif [ -n "$CLI_DRY_RUN" ]; then
+    W_CHANNEL="stable"
+    printf "  Resolving %s channel... " "$W_CHANNEL"
+    W_VER=$(resolve_version "$W_CHANNEL") || {
+      printf "FAILED\n  Could not resolve version for channel: %s\n" "$W_CHANNEL" >&2
+      exit 1
+    }
+    printf "%s\n" "$W_VER"
+  else
+    # shellcheck disable=SC2086
+    W_CHANNEL=$(single_select "Select channel" "stable" $CHANNELS "specific version")
+    if [ "$W_CHANNEL" = "specific version" ]; then
+      printf "\n  Enter version (e.g., 7.22, 7.23beta2): " >&2
+      read -r W_VER
+      W_CHANNEL=""
+    else
+      printf "\n  Resolving %s channel... " "$W_CHANNEL"
+      W_VER=$(resolve_version "$W_CHANNEL") || {
+        printf "FAILED\n  Could not resolve version for channel: %s\n" "$W_CHANNEL" >&2
+        exit 1
+      }
+      printf "%s\n" "$W_VER"
+    fi
+  fi
+
+  # -- Step 2: Architecture --
+  print_header "Step 2: Target Architecture"
+  if [ -n "$CLI_ARCH" ]; then
+    W_ARCH="$CLI_ARCH"
+  elif [ -n "$CLI_DRY_RUN" ]; then
+    W_ARCH="arm"
+    printf "  Using default: arm\n"
+  else
+    printf "  Select one or more target architectures.\n\n"
+    # shellcheck disable=SC2086
+    W_ARCH=$(multi_select "Enter numbers, space-separated (e.g., \"2\" or \"1 2 8\")" $ARCHS)
+    [ -z "$W_ARCH" ] && W_ARCH="arm"
+  fi
+  printf "\n  Selected: %s\n" "$W_ARCH"
+
+  # -- Step 3: Download & Package Selection --
+  print_header "Step 3: Packages"
+
+  if [ -n "$CLI_PKGS" ]; then
+    W_PKGS="$CLI_PKGS"
+    printf "  Using packages: %s\n" "$W_PKGS"
+    # Still download unless dry-run (packages needed for make run)
+    if [ -z "$CLI_DRY_RUN" ]; then
+      printf "  Downloading packages for %s (v%s)...\n\n" "$W_ARCH" "$W_VER"
+      _make_args="ARCH=\"$W_ARCH\" VER=$W_VER"
+      if [ -n "$W_CHANNEL" ]; then
+        _make_args="$_make_args CHANNEL=$W_CHANNEL"
+      fi
+      eval "make -C \"$SCRIPT_DIR\" download $_make_args" || {
+        printf "\n  Download failed. Check your network connection and try again.\n" >&2
+        exit 1
+      }
+    fi
+  elif [ -n "$CLI_DRY_RUN" ]; then
+    printf "  Skipping download in dry-run mode.\n"
+    printf "  Use --pkgs to specify packages, or run without --dry-run for interactive selection.\n"
+    W_PKGS=""
+  else
+    printf "  Downloading packages for %s (v%s)...\n\n" "$W_ARCH" "$W_VER"
+    _make_args="ARCH=\"$W_ARCH\" VER=$W_VER"
+    if [ -n "$W_CHANNEL" ]; then
+      _make_args="$_make_args CHANNEL=$W_CHANNEL"
+    fi
+    eval "make -C \"$SCRIPT_DIR\" download $_make_args" || {
+      printf "\n  Download failed. Check your network connection and try again.\n" >&2
+      exit 1
+    }
+
+    printf "\n  Scanning available packages...\n"
+    _pkg_list=$(extract_packages "$W_VER" "$W_ARCH")
+    if [ -z "$_pkg_list" ]; then
+      printf "  No extra packages found.\n"
+      W_PKGS=""
+    else
+      printf "\n  WiFi driver varies by device model (wifi-qcom, wifi-qcom-ac,\n"
+      printf "  wifi-mediatek, wireless). Check your device specifications.\n\n"
+      printf "  The routeros system package is always included automatically.\n\n"
+      # shellcheck disable=SC2086
+      W_PKGS=$(multi_select "Enter numbers, space-separated, or Enter for none" $_pkg_list)
+      printf "\n  Selected: %s\n" "${W_PKGS:-none}"
+    fi
+  fi
+
+  # -- Step 4: Device Mode --
+  if ver_ge "$W_VER" "7.22"; then
+    print_header "Step 4: Device Mode"
+    printf "  First-boot modescript sets the device mode after installation.\n\n"
+
+    if [ -n "$CLI_DRY_RUN" ]; then
+      _mode_choice="Automatic"
+      printf "  Using default: Automatic\n"
+    else
+      _mode_choice=$(single_select "Select device mode" "Automatic" \
+        "Automatic" "Do not change" "Advanced" "RoSE" "Home")
+    fi
+
+    _has_container=""
+    _has_zerotier=""
+    for _p in $W_PKGS; do
+      case "$_p" in
+        container) _has_container=yes ;;
+        zerotier)  _has_zerotier=yes ;;
+      esac
+    done
+
+    case "$_mode_choice" in
+      Automatic)
+        W_MODESCRIPT="/system/device-mode update mode=advanced container=yes zerotier=yes"
+        ;;
+      "Do not change")
+        W_MODESCRIPT=""
+        ;;
+      Advanced)
+        W_MODESCRIPT="/system/device-mode update mode=advanced"
+        [ -n "$_has_container" ] && W_MODESCRIPT="$W_MODESCRIPT container=yes"
+        [ -n "$_has_zerotier" ] && W_MODESCRIPT="$W_MODESCRIPT zerotier=yes"
+        ;;
+      RoSE)
+        W_MODESCRIPT="/system/device-mode update mode=rose"
+        [ -n "$_has_container" ] && W_MODESCRIPT="$W_MODESCRIPT container=yes"
+        [ -n "$_has_zerotier" ] && W_MODESCRIPT="$W_MODESCRIPT zerotier=yes"
+        ;;
+      Home)
+        W_MODESCRIPT="/system/device-mode update mode=home"
+        [ -n "$_has_container" ] && W_MODESCRIPT="$W_MODESCRIPT container=yes"
+        [ -n "$_has_zerotier" ] && W_MODESCRIPT="$W_MODESCRIPT zerotier=yes"
+        ;;
+    esac
+
+    if [ -n "$W_MODESCRIPT" ]; then
+      printf "\n  Modescript: %s\n" "$W_MODESCRIPT"
+    else
+      printf "\n  No modescript will be applied.\n"
+    fi
+  else
+    W_MODESCRIPT=""
+    printf "\n  (Skipping device mode — requires netinstall 7.22+, have %s)\n" "$W_VER"
+  fi
+
+  # -- Step 5: Install Config --
+  print_header "Step 5: Install Config"
+  if [ -n "$CLI_DRY_RUN" ]; then
+    W_OPTS="-b -r"
+    printf "  Using default: Reinstall with default config (%s)\n" "$W_OPTS"
+  else
+    _config=$(single_select "Select install configuration" "Reinstall with default config" \
+      "Reinstall with default config" "Reinstall with empty config")
+    case "$_config" in
+      *default*) W_OPTS="-b -r" ;;
+      *empty*)   W_OPTS="-b -e" ;;
+    esac
+    printf "\n  Flags: %s\n" "$W_OPTS"
+  fi
+
+  # -- Step 6: Network Interface --
+  print_header "Step 6: Network Interface"
+  if [ -n "$CLI_IFACE" ]; then
+    W_IFACE="$CLI_IFACE"
+  elif [ -n "$CLI_DRY_RUN" ]; then
+    W_IFACE="eth0"
+    printf "  Using default: eth0\n"
+  else
+    _ifaces=$(detect_interfaces)
+    if [ -n "$_ifaces" ]; then
+      printf "  Detected network interfaces:\n\n"
+      _n=0
+      _first_iface=""
+      echo "$_ifaces" | while IFS= read -r _line; do
+        _n=$((_n + 1))
+        printf "  %d) %s\n" "$_n" "$_line"
+      done
+      printf "  c) Enter custom interface name\n"
+      printf "\nSelect interface [1]: "
+      read -r _iface_choice
+      if [ -z "$_iface_choice" ]; then
+        _iface_choice=1
+      fi
+      if [ "$_iface_choice" = "c" ]; then
+        printf "  Interface name: "
+        read -r W_IFACE
+      else
+        W_IFACE=$(echo "$_ifaces" | sed -n "${_iface_choice}p" | awk '{print $1}')
+      fi
+    else
+      printf "  No interfaces detected.\n"
+      printf "  Enter interface name: "
+      read -r W_IFACE
+    fi
+  fi
+  [ -z "$W_IFACE" ] && W_IFACE="eth0"
+  printf "\n  Interface: %s\n" "$W_IFACE"
+  if [ "$HOST_OS" = "Darwin" ]; then
+    print_note "On macOS, this is the host interface the QEMU VM bridges to."
+  fi
+
+  # -- Step 7: Run Mode --
+  print_header "Step 7: Run Mode"
+  if [ -n "$CLI_MODE" ]; then
+    W_TARGET="$CLI_MODE"
+  elif [ -n "$CLI_DRY_RUN" ]; then
+    W_TARGET="run"
+    printf "  Using default: run once\n"
+  else
+    _run_mode=$(single_select "Select run mode" "Run once" \
+      "Run once" "Run as service (loop)")
+    case "$_run_mode" in
+      *once*)    W_TARGET="run" ;;
+      *service*) W_TARGET="service" ;;
+    esac
+  fi
+  printf "\n  Mode: %s\n" "$W_TARGET"
+  if [ "$HOST_OS" = "Darwin" ]; then
+    if [ "$W_TARGET" = "service" ]; then
+      print_note "Press Ctrl-A X to exit the QEMU VM when done."
+    else
+      print_note "Press Ctrl-A X to exit the QEMU VM if it does not shut down automatically."
+    fi
+  fi
+
+  # -- Step 8: Summary & Confirmation --
+  print_header "Summary"
+  printf "  Channel:      %s\n" "${W_CHANNEL:-pinned}"
+  printf "  Version:      %s\n" "$W_VER"
+  printf "  Architecture: %s\n" "$W_ARCH"
+  printf "  Packages:     %s\n" "${W_PKGS:-none}"
+  printf "  Config:       %s\n" "$W_OPTS"
+  printf "  Interface:    %s\n" "$W_IFACE"
+  printf "  Run mode:     %s\n" "$W_TARGET"
+  if [ -n "$W_MODESCRIPT" ]; then
+    printf "  Modescript:   %s\n" "$W_MODESCRIPT"
+  fi
+
+  # Build the make command
+  _cmd="make -C \"$SCRIPT_DIR\" $W_TARGET"
+  _cmd="$_cmd ARCH=\"$W_ARCH\""
+  _cmd="$_cmd VER=$W_VER"
+  if [ -n "$W_PKGS" ]; then
+    _cmd="$_cmd PKGS=\"$W_PKGS\""
+  fi
+  _cmd="$_cmd IFACE=$W_IFACE"
+  _cmd="$_cmd OPTS=\"$W_OPTS\""
+  if [ -n "$W_MODESCRIPT" ]; then
+    _cmd="$_cmd MODESCRIPT=\"$W_MODESCRIPT\""
+  fi
+
+  # Determine if sudo is needed
+  _need_sudo=""
+  if [ "$HOST_OS" = "Darwin" ]; then
+    _need_sudo=yes
+  elif [ "$(id -u)" != "0" ]; then
+    _need_sudo=yes
+  fi
+  if [ -n "$_need_sudo" ]; then
+    _cmd="sudo $_cmd"
+  fi
+
+  printf "\n  Command:\n    %s\n" "$_cmd"
+
+  if [ -n "$CLI_DRY_RUN" ]; then
+    printf "\n  (dry run — not executing)\n"
+    exit 0
+  fi
+
+  printf "\nRun this command? [Y/n]: "
+  read -r _confirm
+  case "$_confirm" in
+    [nN]*) printf "  Aborted.\n"; exit 0 ;;
+  esac
+
+  printf "\n"
+  cd "$SCRIPT_DIR"
+  eval "$_cmd"
+}
+
+main "$@"
