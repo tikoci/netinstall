@@ -13,6 +13,18 @@ applyTo: "**/*.sh"
 - Makefile recipes: prefer `wget` over `curl` (busybox includes wget)
 - Standalone scripts (e.g. `routeros-setup.sh`): `curl` is fine — it's a stated dependency
 
+## dash-Specific Gotchas (GitHub Actions `/bin/sh`)
+
+GitHub Actions uses `dash` as `/bin/sh`. dash is stricter than bash in ways that cause subtle failures:
+
+- **`$(( ))` arithmetic trap in recipes**: In Makefile recipes `$$(( ))` escapes to `$(( ))` in the shell — dash rejects this as malformed arithmetic with "Missing '))'". Use `$$( ( cmd ) )` instead (see makefile.instructions.md for detail).
+- **No `local`**: dash does not support `local` in functions — use subshells or positional params
+- **String comparisons**: use `=` not `==` in `[ ]` tests — dash rejects `==`
+- **`echo -e`**: dash's `echo -e` does NOT interpret escapes — use `printf` for escape sequences
+- **Here-strings `<<<`**: not supported — use `printf | cmd` or a heredoc
+- **Process substitution `<()`**: bash-only, not available in dash
+- Test locally with: `shellcheck --shell=dash script.sh`
+
 ## `routeros-setup.sh` Specifics
 
 - Requires `curl`, `jq`, and RouterOS 7.22+

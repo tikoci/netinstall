@@ -23,6 +23,14 @@ Requires GNU make — uses `$(eval)`, `$(foreach)`, `$(call)`, `$(if $(findstrin
 - Prefer `wget` over `curl` (available in Alpine busybox)
 - Multi-line recipes: use `; \` continuation with `@set -e;` at the start for error handling
 
+## Critical Escaping Hazard: `$$(( ))` in Recipes
+
+In Makefile recipes, `$$` escapes to a literal `$` for the shell. This means `$$(( expr ))` becomes `$(( expr ))` — arithmetic expansion — which **dash rejects** with "Missing '))'".  This caused a real CI failure.
+
+- **Never write `$$(( ... ))` in a recipe** — dash parses it as arithmetic expansion
+- Wrap subshell pipelines as `$$( ( cmd ) )` — the space after `(` makes it unambiguously command substitution containing a subshell
+- Example: `_digest=$$( ( shasum -a 256 file 2>/dev/null || sha256sum file ) | cut -d' ' -f1)`
+
 ## Version Resolution
 
 - `channel_ver` fetches from `upgrade.mikrotik.com` with retry logic (5 attempts, 2s delay)

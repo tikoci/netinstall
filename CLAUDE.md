@@ -238,4 +238,6 @@ Start: `/container/start [find tag~"netinstall"]`
 
 - **macOS ships GNU Make 3.81** (2006). Complex shell parameter expansion (`${var%%.*}`, `${var#prefix}`) inside `$(shell ...)` causes parse errors. Use `awk` instead.
 - **`$(shell)` runs `/bin/sh`** — on Alpine that's busybox `ash`, on GitHub Actions it's `dash`. Both are stricter than bash.
+- **`$$(( ))` in recipes is a CI failure trap**: In recipe lines `$$` escapes to a literal `$`, so `$$(( expr ))` becomes `$(( expr ))` — arithmetic expansion — which dash rejects with "Missing '))'". Use `$$( ( cmd ) )` (space after the second `(`) for nested command substitution. Example: `_digest=$$( ( shasum -a 256 file || sha256sum file ) | cut -d' ' -f1)` (fixed in commit 72bfebb).
+- **dash rejects `==` in `[ ]`**: use `=` for string comparison. Also no `echo -e`, no here-strings `<<<`, no process substitution `<()`, no `local` in functions.
 - **DNS may not be ready** at container startup. Any `$(shell wget ...)` called during Makefile parsing (like `channel_ver`) needs retry logic.
