@@ -41,7 +41,7 @@ make image-platform IMAGE_PLATFORM=linux/arm64
 # Remove all downloads, images, and build artifacts
 make clean
 
-# Debug: print computed ARCH/VER/CHANNEL/PLATFORM/OS/QEMU/MODESCRIPT
+# Debug: print computed ARCH/VER/CHANNEL/PLATFORM/OS/QEMU/QEMU_SYSTEM/MODESCRIPT
 make dump
 
 # Keep container alive without running netinstall (use for /container/shell access)
@@ -77,7 +77,7 @@ Variables use `?=` (default if not set), so they can be overridden via CLI (`mak
 | `VER` | *(from CHANNEL)* | Pin a specific RouterOS version (e.g. `7.14.3`, `7.15rc2`). Overrides CHANNEL for the OS image. |
 | `VER_NETINSTALL` | *(from CHANNEL)* | Pin the `netinstall-cli` version independently from `VER`. Newer netinstall can install older ROS. |
 | `OPTS` | `-b -r` | Raw flags passed to `netinstall-cli`. Use `-e` instead of `-r` for empty config. See flags below. |
-| `IFACE` | `eth0` | Network interface for netinstall (`-i` mode). In containers, set to the VETH name (RouterOS 7.21+ uses VETH name as interface name). |
+| `IFACE` | `eth0` | Network interface for netinstall (`-i` mode). In containers, set to the VETH name (RouterOS 7.21+ uses VETH name as interface name). On macOS, this is the host interface to bridge to (e.g. `en5`). |
 | `CLIENTIP` | *(unset)* | If set, uses `-a <CLIENTIP>` instead of `-i <IFACE>`. |
 | `NET_OPTS` | *(computed)* | Overrides both IFACE and CLIENTIP; set directly if needed (e.g. `NET_OPTS=-i en4`). |
 | `MODESCRIPT` | *(auto-set if applicable)* | RouterOS script for first boot via `-sm`. Auto-set when PKGS includes `container` or `zerotier` and VER_NETINSTALL >= 7.22. |
@@ -86,6 +86,9 @@ Variables use `?=` (default if not set), so they can be overridden via CLI (`mak
 | `DLDIR` | `downloads` | Directory for downloaded packages and netinstall binary. |
 | `IMAGE` | `tikoci/netinstall` | OCI image name/tag for `make image` and `make image-push`. CI overrides to `ammo74/netinstall` for DockerHub. |
 | `IMAGE_PLATFORMS` | `linux/arm64 linux/arm/v7 linux/amd64` | Platforms built by `make image`. |
+| `QEMU_SYSTEM` | *(auto-detected)* | Path to `qemu-system-x86_64`. Used on macOS for VM-based netinstall. Auto-detected via `command -v`. |
+| `VMLINUZ` | `$(DLDIR)/vmlinuz-virt` | Alpine virt kernel for macOS VM. Built from `linux-virt` APK. |
+| `VM_INITRAMFS` | `$(DLDIR)/initramfs-netinstall.gz` | Custom initramfs for macOS VM (Alpine rootfs + modules + init). |
 
 ## `netinstall-cli` Flags (for `OPTS`)
 

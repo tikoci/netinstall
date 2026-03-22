@@ -83,7 +83,7 @@ Requires RouterOS 7.22+ (uses 7.22+ REST API property names). Key REST API notes
 
 ## Planned Future Work (design awareness, do not implement)
 
-1. **Local use on aarch64 Linux** (partially done): Makefile auto-detects `qemu-i386` from system packages. macOS cannot run `netinstall-cli` natively (Linux ELF binary) — requires container approach.
+1. **Local use on non-x86 platforms** (done): Makefile auto-detects `qemu-i386` on aarch64 Linux. On macOS, `make run`/`make service` boot a QEMU system VM with vmnet-bridged networking and 9p host sharing — transparent to the user.
 2. **Post-install orchestration**: After `netinstall-cli` completes, PoE switch port cycling for `/system/device-mode`. MODESCRIPT handles first-boot config; missing piece is PoE cycling.
 3. **Cross-platform Makefile**: GNU make required. POSIX shell portability in recipes — `dash` (GitHub Actions) and busybox `ash` (Alpine) are the strictest targets.
 
