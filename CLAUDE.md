@@ -10,7 +10,7 @@ This project wraps MikroTik's `netinstall-cli` binary in a `Makefile` to automat
 
 The entire "application logic" lives in `Makefile`. OCI images are built with `make image` using `crane` (no Docker required), producing a single-layer Docker v1 tar. A traditional `Dockerfile` is also provided as an alternative for users who prefer `docker build`.
 
-**This is a Makefile-based project — not Node.js/Bun/npm.** Ignore any parent-level instructions about defaulting to Bun. Core tools: GNU `make`, `wget`, `unzip`, and standard POSIX utilities. Image building adds `crane`. The `tools/container-manager.sh` script uses `curl` and `jq`. On macOS, all are available via `brew`. Future post-install orchestration may use `bun`, but the Makefile core will remain.
+**This is a Makefile-based project — not Node.js/Bun/npm.** Ignore any parent-level instructions about defaulting to Bun. Core tools: GNU `make`, `wget`, `unzip`, and standard POSIX utilities. Image building adds `crane` (`brew install crane` on macOS, `go install` in CI). The `tools/container-manager.sh` script uses `curl` and `jq`. On macOS, all are available via `brew`. Future post-install orchestration may use `bun`, but the Makefile core will remain.
 
 GitHub repo: `tikoci/netinstall` — DockerHub image: `ammo74/netinstall` — License: CC0 1.0 (public domain).
 
@@ -216,7 +216,7 @@ Contains Dockerfiles and scripts for building custom OCI images with pre-downloa
 
 ## CI/CD
 
-- `build-and-push.yaml`: Manual dispatch only. Uses `crane` (installed via `go install`) to build multi-platform images with `make image`. Pushes to DockerHub (`ammo74/netinstall`) and GHCR (`ghcr.io/tikoci/netinstall`) — note the CI explicitly overrides `IMAGE=` for each registry, so the Makefile default (`tikoci/netinstall`) doesn't affect CI pushes.
+- `build-and-push.yaml`: Manual dispatch only. Runs `make test` (checkmake + shellcheck), then uses `crane` (installed via `go install` in CI) to build multi-platform images with `make image`. Pushes to DockerHub (`ammo74/netinstall`) and GHCR (`ghcr.io/tikoci/netinstall`) — note the CI explicitly overrides `IMAGE=` for each registry, so the Makefile default (`tikoci/netinstall`) doesn't affect CI pushes.
 - `repo-as-web.yaml`: Triggers on push to `master`. Deploys repo to GitHub Pages and updates DockerHub description from `README.md`.
 
 ## MikroTik `/container` Quick Reference

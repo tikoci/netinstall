@@ -89,6 +89,7 @@ dump:
 
 test:
 	checkmake Makefile
+	shellcheck --shell=dash mknetinstall tools/container-manager.sh
 
 wizard:
 	@./mknetinstall

@@ -179,19 +179,29 @@ The complete RouterOS CLI script is also available as `tools/container-setup.rsc
 
 ## macOS VM Details
 
-`netinstall-cli` is a Linux x86 ELF binary — it cannot run natively on macOS.  On macOS, `make run` and `make service` automatically boot a lightweight QEMU system VM:
+MikroTik's `netinstall-cli` is a Linux x86 ELF binary — it cannot run natively on macOS.  Rather than requiring Docker Desktop (which lacks the bridged networking `netinstall` needs), this project uses [QEMU](https://www.qemu.org/) to boot a minimal Linux VM that bridges directly to a macOS ethernet port.  This gives `netinstall-cli` the raw Layer 2 access it needs for BOOTP/TFTP, which Docker's NAT networking cannot provide.
 
-- Alpine virt kernel + custom initramfs with virtio/9p modules
-- Host directory mounted via 9p (`virtfs`) at `/host`
-- vmnet-bridged networking connects the VM to the macOS interface
-- Inside the VM, `netinstall-cli` runs natively on x86_64 Linux
+On macOS, `make run` and `make service` transparently delegate to a QEMU VM.  Here's what happens under the hood:
 
-**First run** builds the VM components (kernel + initramfs) from an Alpine APK — cached in `downloads/`.  Subsequent runs start in seconds.
+- Boots a lightweight [Alpine Linux](https://alpinelinux.org/) VM (~15MB kernel + initramfs) via [`qemu-system-x86_64`](https://www.qemu.org/docs/master/system/target-i386.html)
+- Uses [vmnet-bridged networking](https://developer.apple.com/documentation/vmnet) to connect the VM directly to your macOS ethernet port — the VM appears as a device on that network segment, just like a physical Linux machine
+- Shares the project directory into the VM via [9p/virtfs](https://wiki.qemu.org/Documentation/9psetup), so downloaded packages are accessible without copying
+- Inside the VM, `netinstall-cli` runs natively on x86_64 Linux — no user-mode emulation overhead
+
+**Why not Docker?** Docker Desktop on macOS runs containers inside a Linux VM with NAT networking.  `netinstall-cli` needs to send and receive BOOTP (broadcast) and TFTP packets on the same Layer 2 network as the target device.  Docker's NAT breaks this.  QEMU's vmnet-bridged mode gives the VM a real presence on the physical network — exactly what `netinstall` requires.
+
+**First run** builds the VM components (kernel + initramfs) from an Alpine Linux APK — cached in `downloads/`.  Subsequent runs start in seconds.
 
 **Requirements:**
-- `qemu-system-x86_64` — `brew install qemu`
-- `crane` — needed once to build the VM rootfs from the Alpine OCI image
-- `sudo` — required for vmnet-bridged networking
+
+```sh
+brew install qemu crane wget
+```
+
+- [`qemu`](https://formulae.brew.sh/formula/qemu) — provides `qemu-system-x86_64` for the VM
+- [`crane`](https://formulae.brew.sh/formula/crane) — needed once to extract the Alpine rootfs from its OCI image when building the VM initramfs
+- `wget` — for downloading RouterOS packages
+- `sudo` — required for vmnet-bridged networking (macOS prompts for your password)
 
 > `make download` works on macOS without QEMU — it only downloads packages.  QEMU is only needed for `make run` and `make service`.
 

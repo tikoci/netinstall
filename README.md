@@ -49,19 +49,29 @@ sudo make run ARCH=mipsbe VER=7.14.3 PKGS="iot gps" CLIENTIP=192.168.88.7
 
 ### macOS
 
-MikroTik's `netinstall-cli` is a Linux-only binary.  This project makes it work on macOS by automatically booting a lightweight QEMU VM with bridged networking — the same `make` commands work on both platforms.
+MikroTik's `netinstall-cli` is a Linux-only binary.  This project uses a lightweight [QEMU](https://www.qemu.org/) VM with bridged networking so `netinstall` can access your ethernet port directly — no Docker required.  The same `make` commands work on both platforms.
+
+#### Get the project
+
+```sh
+# Option A: git clone
+git clone https://github.com/tikoci/netinstall.git && cd netinstall
+
+# Option B: download ZIP
+curl -L https://github.com/tikoci/netinstall/archive/refs/heads/master.zip -o netinstall.zip
+unzip netinstall.zip && cd netinstall-master
+```
 
 #### Install prerequisites
 
 ```sh
-brew install qemu make wget
-go install github.com/google/go-containerregistry/cmd/crane@latest
+brew install qemu crane make wget
 ```
 
 - `qemu` — provides `qemu-system-x86_64` for the VM
+- `crane` — extracts the Alpine rootfs when building the VM (needed once, cached after)
 - `make` — Homebrew's GNU make (macOS ships an older version that also works, but Homebrew's is recommended)
-- `wget` — for downloading packages
-- `crane` — needed once to build the VM rootfs from an Alpine OCI image
+- `wget` — for downloading RouterOS packages
 
 #### Run netinstall
 
@@ -177,7 +187,7 @@ For Docker-based builds, see `tools/docker/`.  For details on the image format a
 | `make clean` | Remove all downloads, images, and build artifacts |
 | `make dump` | Print computed variables for debugging |
 | `make nothing` | Keep container alive without running netinstall |
-| `make test` | Lint the Makefile with checkmake |
+| `make test` | Lint Makefile (checkmake) and shell scripts (shellcheck with `--shell=dash`) |
 
 Channel shortcuts: `make stable`, `make testing`, `make long-term`, `make development`
 

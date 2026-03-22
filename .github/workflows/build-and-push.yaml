@@ -22,7 +22,7 @@ jobs:
       name: Install checkmake
       run: go install github.com/mrtazz/checkmake/cmd/checkmake@latest && echo "$HOME/go/bin" >> $GITHUB_PATH
     -
-      name: Lint Makefile
+      name: Lint Makefile and shell scripts
       run: make test
     -
       name: Install crane
