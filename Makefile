@@ -163,7 +163,7 @@ image-platform:
 	cp Makefile .image-build/rootfs/app/Makefile; \
 	echo "  creating layer"; \
 	tar cf .image-build/image/layer.tar -C .image-build/rootfs .; \
-	_digest=$$(( shasum -a 256 .image-build/image/layer.tar 2>/dev/null || \
+	_digest=$$( ( shasum -a 256 .image-build/image/layer.tar 2>/dev/null || \
 	  sha256sum .image-build/image/layer.tar ) | cut -d' ' -f1); \
 	printf '{"architecture":"%s","os":"linux","config":{"WorkingDir":"/app","Cmd":["make","service"]},"rootfs":{"type":"layers","diff_ids":["sha256:%s"]}}' \
 	  "$$cfg_arch" "$$_digest" > .image-build/image/config.json; \
