@@ -4,3 +4,4 @@ images
 .vm-build
 .vm-cmd.sh
 .modescript.rsc
+.DS_Store
