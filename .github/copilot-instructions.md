@@ -35,7 +35,7 @@ All use `?=` (overridable via CLI args or env vars):
 | `IFACE` | `eth0` | Interface for `-i` mode. In containers, set to VETH name (RouterOS 7.21+). |
 | `CLIENTIP` | *(unset)* | If set, uses `-a <CLIENTIP>` mode instead of `-i <IFACE>` |
 | `NET_OPTS` | *(computed)* | Overrides both IFACE and CLIENTIP; set directly if needed (e.g. `NET_OPTS=-i en4`) |
-| `MODESCRIPT` | *(auto-set)* | First-boot script via `-sm`. Auto-set when PKGS includes `container` or `zerotier` and VER_NETINSTALL >= 7.22. |
+| `MODESCRIPT` | *(auto-set)* | First-boot script via `-sm`. Auto-set to `/system/device-mode update mode=advanced` (plus `container=yes`/`zerotier=yes` per PKGS) when both VER and VER_NETINSTALL >= 7.22. |
 | `PKGS_CUSTOM` | *(empty)* | Full paths to custom/branding packages; appended verbatim to netinstall command |
 | `QEMU` | *(auto-detected)* | Path to `qemu-i386` binary. Auto-detects `./i386` (container), `qemu-i386-static`, or `qemu-i386`. Skipped on x86_64. |
 | `DLDIR` | `downloads` | Directory for downloaded packages and netinstall binary |

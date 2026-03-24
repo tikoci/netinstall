@@ -80,7 +80,7 @@ Variables use `?=` (default if not set), so they can be overridden via CLI (`mak
 | `IFACE` | `eth0` | Network interface for netinstall (`-i` mode). In containers, set to the VETH name (RouterOS 7.21+ uses VETH name as interface name). On macOS, this is the host interface to bridge to (e.g. `en5`). |
 | `CLIENTIP` | *(unset)* | If set, uses `-a <CLIENTIP>` instead of `-i <IFACE>`. |
 | `NET_OPTS` | *(computed)* | Overrides both IFACE and CLIENTIP; set directly if needed (e.g. `NET_OPTS=-i en4`). |
-| `MODESCRIPT` | *(auto-set if applicable)* | RouterOS script for first boot via `-sm`. Auto-set when PKGS includes `container` or `zerotier` and VER_NETINSTALL >= 7.22. |
+| `MODESCRIPT` | *(auto-set if applicable)* | RouterOS script for first boot via `-sm`. Auto-set to `/system/device-mode update mode=advanced` (plus `container=yes`/`zerotier=yes` if those packages are in PKGS) when both VER and VER_NETINSTALL >= 7.22. |
 | `PKGS_CUSTOM` | *(empty)* | Full container-relative paths to custom/branding packages; appended verbatim to netinstall command. |
 | `QEMU` | *(auto-detected)* | Path to `qemu-i386` binary. Auto-detects `./i386` (container), `qemu-i386-static`, or `qemu-i386` from PATH. Skipped on x86_64. |
 | `DLDIR` | `downloads` | Directory for downloaded packages and netinstall binary. |
@@ -120,7 +120,7 @@ netinstall-cli [-r] [-e] [-b] [-m [-o]] [-f] [-v] [-c]
 
 1. **Version resolution**: `channel_ver` calls `wget` against `https://upgrade.mikrotik.com/routeros/NEWESTa7.<channel>` with retry logic (5 attempts, 2s delay) to handle DNS races at container startup.
 2. **Version comparison**: `ver_ge` uses awk for major.minor comparison: `$(shell echo '$(1) $(2)' | awk ...)`. This avoids `${var%%.*}` shell parameter expansion which GNU Make 3.81 (macOS default) can't parse in `$(shell)`.
-3. **MODESCRIPT auto-detection**: When PKGS includes `container` or `zerotier` and VER_NETINSTALL >= 7.22, MODESCRIPT defaults to `/system/device-mode update mode=advanced container=yes zerotier=yes`. The Makefile writes this to `.modescript.rsc` and passes `-sm .modescript.rsc`.
+3. **MODESCRIPT auto-detection**: When both VER and VER_NETINSTALL >= 7.22, MODESCRIPT defaults to `/system/device-mode update mode=advanced` with `container=yes` and/or `zerotier=yes` appended if those packages are in PKGS. The Makefile writes this to `.modescript.rsc` and passes `-sm .modescript.rsc`.
 4. **File targets**: `$(DLDIR)/routeros-$(VER)-$(ARCH).npk`, `$(DLDIR)/netinstall-cli-$(VER_NETINSTALL)`, and `$(DLDIR)/all_packages-$(ARCH)-$(VER).zip` are Make file targets — only downloaded if the files don't exist.
 5. **QEMU detection**: `PLATFORM=$(shell uname -m)` and `OS=$(shell uname -s)`. On x86_64 Linux, QEMU is skipped. On non-x86_64 Linux, `find_qemu` probes `./i386` (container), `qemu-i386-static` (Debian/Ubuntu), then `qemu-i386` (Alpine/Fedora) via `command -v`. On macOS (Darwin), the `run` and `service` targets use `ifeq ($(OS),Darwin)` to delegate to `vm-run`, which boots a QEMU system VM with vmnet-bridged networking (see VM section below).
 6. **Run target**: filters `PKGS_FILES` to only existing files (skips missing packages rather than erroring), then builds the full `netinstall-cli` command.

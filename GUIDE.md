@@ -30,7 +30,7 @@ Each time `make` runs, the channel's current version is checked via `upgrade.mik
 | Variable | Default | Purpose |
 |---|---|---|
 | `OPTS` | `-b -r` | Raw flags passed to `netinstall-cli`. `-r` = reset to default config, `-e` = empty config (mutually exclusive), `-b` = strip branding. |
-| `MODESCRIPT` | *(auto-set)* | First-boot script via `-sm`. Auto-set to `/system/device-mode update mode=advanced container=yes zerotier=yes` when PKGS includes `container` or `zerotier` and VER_NETINSTALL >= 7.22. |
+| `MODESCRIPT` | *(auto-set)* | RouterOS script content passed via `-sm` for first-boot execution. Auto-set when both `VER` and `VER_NETINSTALL` >= 7.22. See [First-Boot Script](#first-boot-script) below. |
 
 > If a netinstall flag needs a file (e.g., `-s <defconf>`), use `/container/mount` and the container-relative path in `OPTS`.
 
@@ -61,6 +61,70 @@ MikroTik has a video explaining the interface vs IP options: [Latest netinstall-
 | `QEMU_SYSTEM` | *(auto-detected)* | Path to `qemu-system-x86_64`. Auto-detected via `command -v`. |
 | `VMLINUZ` | `$(DLDIR)/vmlinuz-virt` | Alpine virt kernel for macOS VM. |
 | `VM_INITRAMFS` | `$(DLDIR)/initramfs-netinstall.gz` | Custom initramfs for macOS VM. |
+
+## First-Boot Script
+
+`netinstall-cli` 7.22 added the `-sm` flag, which runs a RouterOS script **once on first boot** after flashing — before the device is accessible via the network.  Unlike `-s` (default configuration script), the first-boot script is **not saved** to the device; it executes during the initial boot and is then discarded.
+
+The `-sm` flag is only available in `netinstall-cli` 7.22 and newer; on older versions, no first-boot script is sent regardless of the `MODESCRIPT` setting.
+
+The primary use case is automating `/system/device-mode` setup.  Setting device-mode normally requires logging into each device, running `/system/device-mode update`, confirming a physical power cycle, and waiting for reboot — a significant bottleneck when flashing in bulk.  With `-sm`, device-mode is configured automatically on first boot.
+
+### Auto-detection (default behavior)
+
+When **both** `VER` and `VER_NETINSTALL` are 7.22 or newer, the Makefile automatically sets `MODESCRIPT` to a `/system/device-mode update` command.  The base is always `mode=advanced`, with `container=yes` and `zerotier=yes` added conditionally based on `PKGS`:
+
+| Condition | MODESCRIPT value |
+|---|---|
+| 7.22+, `PKGS` includes `container` and `zerotier` | `/system/device-mode update mode=advanced container=yes zerotier=yes` |
+| 7.22+, `PKGS` includes `container` only | `/system/device-mode update mode=advanced container=yes` |
+| 7.22+, `PKGS` includes `zerotier` only | `/system/device-mode update mode=advanced zerotier=yes` |
+| 7.22+, `PKGS` has neither (e.g. default `wifi-qcom-ac`) | `/system/device-mode update mode=advanced` |
+| Either `VER` or `VER_NETINSTALL` < 7.22 | *(empty — no `-sm` flag passed)* |
+
+This means that on 7.22+, `mode=advanced` is always set on first boot, and the container/zerotier flags match whatever packages you're installing.
+
+### Overriding with a custom script
+
+Set `MODESCRIPT` to any RouterOS script content to replace the auto-detected default:
+
+```sh
+# Add DNS configuration to the first-boot script
+sudo make run ARCH=arm64 PKGS="container wifi-qcom-ac" \
+  MODESCRIPT='/system/device-mode update mode=advanced container=yes
+/ip dns set servers=1.1.1.1,8.8.8.8'
+
+# Completely custom script — skip device-mode, just set an identity
+sudo make run ARCH=arm64 VER=7.22 \
+  MODESCRIPT='/system identity set name=factory-reset'
+```
+
+In a RouterOS `/container/envs` configuration:
+
+```routeros
+/container envs add key=MODESCRIPT list=NETINSTALL \
+  value="/system/device-mode update mode=advanced container=yes"
+```
+
+### Disabling the mode script
+
+To prevent any first-boot script from being sent — even on 7.22+ — set `MODESCRIPT` to an empty value:
+
+```sh
+sudo make run ARCH=arm64 PKGS="container wifi-qcom-ac" MODESCRIPT=
+```
+
+In a RouterOS container, you must explicitly set `MODESCRIPT` to an empty value — omitting the key entirely allows auto-detection to run:
+
+```routeros
+/container envs add key=MODESCRIPT list=NETINSTALL value=""
+```
+
+### How it works internally
+
+The Makefile writes the `MODESCRIPT` content to a temporary file (`.modescript.rsc`) and passes it via `-sm .modescript.rsc` to `netinstall-cli`.  The file is created fresh on each run and cleaned up by `make clean`.  Since `MODESCRIPT` uses `?=`, environment variables, CLI args, and `/container/envs` all take precedence over the auto-detected default — but the variable must be _defined_ (even as empty) to suppress auto-detection.
+
+See MikroTik's [`/system/device-mode` documentation](https://help.mikrotik.com/docs/spaces/ROS/pages/197033996/Device+Mode) for the full list of `device-mode` flags and options.
 
 ## `netinstall-cli` Flags Reference
 

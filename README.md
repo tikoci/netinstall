@@ -158,9 +158,27 @@ All variables use `?=` — override via CLI (`make VAR=val`), environment, or `/
 | `OPTS` | `-b -r` | Flags for `netinstall-cli` (`-r` default config, `-e` empty config, `-b` strip branding) |
 | `IFACE` | `eth0` | Network interface; set to VETH name in containers, macOS host interface for VM |
 | `CLIENTIP` | *(unset)* | Use `-a <IP>` instead of `-i <IFACE>` |
-| `MODESCRIPT` | *(auto-set)* | First-boot script via `-sm`; auto-set when PKGS includes `container`/`zerotier` and version >= 7.22 |
+| `MODESCRIPT` | *(auto-set)* | First-boot mode script via `-sm` — see [Controlling `device-mode`](#controlling-device-mode) below |
 
 See the [Configuration Guide](GUIDE.md) for the complete variable reference, `netinstall-cli` flags, and advanced options.
+
+### Controlling `device-mode`
+
+RouterOS uses `/system/device-mode` to control access to advanced features like containers and ZeroTier.  `netinstall-cli` 7.22 added the `-sm` flag, which accepts a RouterOS script that runs once on first boot — before the device is network-accessible.
+
+When **both** `VER` and `VER_NETINSTALL` are 7.22 or newer, the Makefile automatically generates a `MODESCRIPT` that sets `mode=advanced` and conditionally enables `container=yes` and/or `zerotier=yes` based on what's in `PKGS`.  For example, with the default `PKGS=wifi-qcom-ac`:
+
+```routeros
+/system/device-mode update mode=advanced
+```
+
+With `PKGS="container wifi-qcom-ac"`:
+
+```routeros
+/system/device-mode update mode=advanced container=yes
+```
+
+When either version is below 7.22, no `-sm` flag is passed.  `MODESCRIPT` accepts any RouterOS script content — set it directly to override the default, or set `MODESCRIPT=` (empty) to disable it entirely.  See the [Configuration Guide](GUIDE.md#first-boot-script) for the full behavior table and examples.
 
 ## Building Container Images
 

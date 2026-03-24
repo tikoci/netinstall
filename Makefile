@@ -20,8 +20,9 @@ ROUTEROS_FILES := $(foreach arch,$(ARCH),$(DLDIR)/routeros-$(VER)-$(arch).npk)
 PKGS_FILES := $(foreach arch,$(ARCH),$(foreach pkg,$(PKGS),$(DLDIR)/$(pkg)-$(VER)-$(arch).npk))
 ALL_PACKAGES_ZIPS := $(foreach arch,$(ARCH),$(DLDIR)/all_packages-$(arch)-$(VER).zip)
 
-# Auto-set modescript for container/zerotier packages on netinstall >= 7.22
-MODESCRIPT ?= $(if $(and $(or $(findstring container,$(PKGS)),$(findstring zerotier,$(PKGS))),$(call ver_ge,$(VER_NETINSTALL),7.22)),/system/device-mode update mode=advanced container=yes zerotier=yes)
+# Auto-set modescript for device-mode when both VER and VER_NETINSTALL >= 7.22
+# Base: mode=advanced; conditionally adds container=yes and/or zerotier=yes based on PKGS
+MODESCRIPT ?= $(if $(and $(call ver_ge,$(VER),7.22),$(call ver_ge,$(VER_NETINSTALL),7.22)),/system/device-mode update mode=advanced$(if $(findstring container,$(PKGS)), container=yes)$(if $(findstring zerotier,$(PKGS)), zerotier=yes))
 
 PLATFORM ?= $(shell uname -m)
 OS ?= $(shell uname -s)
