@@ -27,13 +27,13 @@ GitHub Actions uses `dash` as `/bin/sh`. dash is stricter than bash in ways that
 
 ## `tools/container-manager.sh` Specifics
 
-- Requires `curl`, `jq`, and RouterOS 7.22+
+- Requires `curl`, `jq`, and RouterOS 7.20+
 - Uses RouterOS REST API (`/rest/` prefix):
   - **PUT** = create new resource
   - **PATCH** = update existing
   - **POST** = run command
   - **DELETE** = remove
-- Property names differ from pre-7.22 CLI: `envlists` (not `envlist`), `list` (not `name`) for env list field
+- Property names differ from pre-7.20 CLI: `envlists` (not `envlist`), `list` (not `name`) for env list field
 - Container `.running` field returns `"true"`/`"false"` as strings — no `.stopped` field exists
 - Container delete requires full stop first; poll `.running` and retry (up to 5 times, 3s waits)
 - Credential storage: macOS Keychain (`security`) or Linux `secret-tool`; service name pattern: `routeros://HOST`

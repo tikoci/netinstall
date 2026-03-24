@@ -1,6 +1,6 @@
 #!/bin/sh
 # container-manager.sh — Provision and manage netinstall container on RouterOS via REST API
-# Requires: curl, jq, RouterOS 7.22+ (REST API property names changed in 7.22)
+# Requires: curl, jq, RouterOS 7.20+ (REST API property names changed in 7.20)
 set -e
 
 # --- Defaults (override via env or flags) ---

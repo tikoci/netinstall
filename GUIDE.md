@@ -197,7 +197,7 @@ If you prefer to set things up manually on RouterOS, or need to understand what 
 
     > The `IFACE` value must match the VETH name.  Since RouterOS 7.21+, the container network interface is named after the VETH.
     >
-    > The env list field name changed in RouterOS 7.22: `name=` (pre-7.22) became `list=` (7.22+).
+    > The env list field name changed in RouterOS 7.20: `name=` (pre-7.20) became `list=` (7.20+).
 
 5. Create the container:
 

@@ -108,7 +108,7 @@ See [MikroTik's `/container` docs](https://help.mikrotik.com/docs/display/ROS/Co
 
 > [!WARNING]
 >
-> Requires **RouterOS 7.22+** (REST API property names changed in 7.22).
+> Requires **RouterOS 7.20+** (REST API `/container/envs` property `name` changed to `list`.
 
 ```sh
 # Store credentials in system keychain
@@ -133,7 +133,7 @@ For manual setup or to understand what the automated tool does, see `tools/conta
 
 ### Container Environment Variables
 
-Configure via `/container/envs` (RouterOS 7.22+ syntax):
+Configure via `/container/envs` (RouterOS 7.20+ syntax):
 
 ```routeros
 /container envs add key=ARCH    list=NETINSTALL value=arm64
@@ -143,7 +143,7 @@ Configure via `/container/envs` (RouterOS 7.22+ syntax):
 /container envs add key=IFACE   list=NETINSTALL value=veth-netinstall
 ```
 
-> On RouterOS pre-7.22, use `name=NETINSTALL` instead of `list=NETINSTALL`.
+> On RouterOS pre-7.20, use `name=NETINSTALL` instead of `list=NETINSTALL`.
 
 ## Configuration Variables
 

@@ -14,7 +14,7 @@ GitHub repo: `tikoci/netinstall` — DockerHub: `ammo74/netinstall` — License:
 
 - **`Makefile`** — all logic lives here: downloads `netinstall-cli` (x86 binary from MikroTik), downloads RouterOS `.npk` packages for the target architecture, invokes `netinstall-cli` with constructed args. OCI images are also built here via `make image` using `crane` (no Docker required).
 - **`Dockerfile`** — Alpine Linux + `make` + `qemu-i386-static` (copied from Debian build stage). Kept for compatibility with users who prefer `docker build`; CI and primary builds use `make image` (crane).
-- **`tools/container-manager.sh`** — shell script that provisions and manages the netinstall container on a RouterOS device via REST API (setup/start/stop/status/logs/remove). Requires `curl`, `jq`, and RouterOS 7.22+.
+- **`tools/container-manager.sh`** — shell script that provisions and manages the netinstall container on a RouterOS device via REST API (setup/start/stop/status/logs/remove). Requires `curl`, `jq`, and RouterOS 7.20+.
 - **`tools/container-setup.rsc`** — manual RouterOS CLI equivalent of the setup steps (reference/educational).
 - **`tools/docker/`** — Dockerfiles and scripts for building custom OCI images with pre-downloaded packages via `docker buildx`.
 - **`mknetinstall`** — interactive POSIX sh wizard for guided netinstall setup on macOS/Linux.
@@ -79,7 +79,7 @@ Architecture mapping (RouterOS → Docker platform): `arm`→`linux/arm/v7`, `ar
 
 Provisions and manages the netinstall container stack on a RouterOS device via REST API: creates VETH, bridge, environment variables, builds image, uploads via SCP, creates container.
 
-Requires RouterOS 7.22+ (uses 7.22+ REST API property names). Key REST API notes:
+Requires RouterOS 7.20+ (uses `list` as REST API `envs` property, older versions used `name`). Key REST API notes:
 - HTTP verbs: PUT = create, PATCH = update, POST = command, DELETE = remove
 - Container status: use `.running` field (`"true"`/`"false"` as strings)
 - Container delete must fully stop first; poll `.running` and retry
@@ -92,7 +92,7 @@ Requires RouterOS 7.22+ (uses 7.22+ REST API property names). Key REST API notes
 
 ## RouterOS `/container` Integration
 
-The container reads config from `/container/envs` (7.22+ CLI syntax):
+The container reads config from `/container/envs` (7.20+ CLI syntax):
 ```routeros
 /container envs add key=ARCH     list=NETINSTALL value=arm64
 /container envs add key=PKGS     list=NETINSTALL value="container wifi-qcom"
@@ -101,7 +101,7 @@ The container reads config from `/container/envs` (7.22+ CLI syntax):
 /container envs add key=IFACE    list=NETINSTALL value=veth-netinstall
 ```
 
-Note: env list field name changed in RouterOS 7.22 — pre-7.22 CLI used `name=`, 7.22+ and REST API use `list=`.
+Note: env list field name changed in RouterOS 7.20 — pre-7.20 CLI used `name=`, 7.20+ and REST API use `list=`.
 
 Images on DockerHub: `ammo74/netinstall:latest`
 GHCR: `ghcr.io/tikoci/netinstall`
