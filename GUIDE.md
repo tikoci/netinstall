@@ -360,3 +360,43 @@ Use `./mknetinstall --help` for the full option list.
 - No additional language runtime (Python/Node/etc.) needed
 
 The tradeoff is that Makefiles are dense if you're not familiar with GNU make.  But since `make` handles file state and variables well, it saves a lot of boilerplate compared to shell scripts.
+
+## Why Crane Instead of Docker?
+
+`make image` builds the container image using [`crane`](https://github.com/google/go-containerregistry/blob/main/cmd/crane/doc/crane.md) — a small CLI tool from Google's [go-containerregistry](https://github.com/google/go-containerregistry) project — instead of Docker.  No daemon, no Docker Desktop, no background services.
+
+The short version: RouterOS's container loader is better suited to a **Docker v1 tar**, **single layer**, **no gzip compression** on the layer itself, than "proper" OCI images.  That constraint turns out to be easier to satisfy by hand than by wrestling `docker buildx` into producing it.  The actual build is:
+
+1. Pull the Alpine rootfs with `crane export` (no Docker daemon needed)
+2. Drop in `make`, `qemu-i386`, and the `Makefile`
+3. Pack everything into one `layer.tar` with a hand-written `config.json` and `manifest.json`
+4. Push to a registry with `crane push`
+
+The whole image is basically four files on top of Alpine.  `crane` was chosen over `docker buildx` for a simple reason: it runs the same way on macOS and Linux with no services required — `brew install crane` and you're done.  There's nothing crane-specific about the *result*; the `.tar` files in `images/` are standard Docker v1 archives that RouterOS, Docker, and `podman load` all understand.
+
+If you'd rather use Docker, the `Dockerfile` is still there and fully supported — `docker build` produces the same image.  `crane` is just how CI and `make image` work, so you don't need Docker running on your build machine.
+
+## How the macOS VM Works
+
+> Setup, prerequisites, and first-run details are in [macOS VM Details](#macos-vm-details) above.  This section covers *why* the pieces were built the way they were.
+
+`netinstall-cli` is a Linux x86 ELF binary.  It won't run on macOS, and Docker Desktop isn't an option either — `netinstall` needs raw Layer 2 access (BOOTP broadcasts, TFTP) that Docker's NAT networking can't provide.
+
+Instead, `make run` and `make service` transparently boot a minimal Linux VM using **three technologies that fit together neatly**:
+
+**vmnet-bridged** — macOS's built-in [vmnet framework](https://developer.apple.com/documentation/vmnet) gives QEMU a real presence on your physical network.  The VM gets its own MAC address and appears on the same segment as your MikroTik device, just like a physical Linux box plugged into the same switch.  This is what makes BOOTP/TFTP work.  It's why `sudo` is required — vmnet needs it.
+
+**[9p](https://en.wikipedia.org/wiki/9P_(protocol)) / `virtfs` ([Plan 9](https://en.wikipedia.org/wiki/Plan_9_from_Bell_Labs) Remote Filesystem Protocol)** — the project directory on your Mac is shared into the VM as a network filesystem mount.  Linux, including Alpine, [include a driver](https://docs.kernel.org/filesystems/9p.html) that QEMU uses.  Downloaded `.npk` packages stay on your Mac; the VM reads them directly.  There's no copying, no Docker volume, no sync step.  The `Makefile` even runs *inside* the VM via this share — `make service` in the VM is executing the same `Makefile` you see on your Mac.
+
+**Alpine Linux initramfs** — the VM boots a tiny custom initramfs (~15 MB total) built from the Alpine `linux-virt` APK.  It loads the virtio and 9p kernel modules by hand (busybox `insmod`, explicit order), mounts the host share, assigns a link-local IP to `eth0`, then runs `netinstall-cli` natively.  No login prompt, no OpenRC, boots in a few seconds.  The kernel and modules come from the *same* APK to guarantee a version match — a lesson learned the hard way ([Makefile](Makefile)).
+
+On first run, `make` builds the kernel and initramfs automatically and caches them in `downloads/`.  Every subsequent run skips the build entirely.
+
+**QEMU console shortcuts** — the VM runs with `-nographic`, so the terminal *is* the VM's serial console:
+
+| Key | Action |
+|---|---|
+| `Ctrl-A X` | Exit QEMU — kills the VM immediately |
+| `Ctrl-A C` | Toggle the QEMU monitor console — lets you inspect VM state, add devices, etc.  Type `quit` to exit, or `Ctrl-A C` again to return to the serial console. |
+
+You shouldn't need the QEMU console for normal use, but it's there if you ever need to poke at VM state.
