@@ -271,9 +271,83 @@ brew install qemu crane wget
 
 ## Linux Prerequisites
 
-- `make`, `wget`, `unzip`
-- On aarch64/ARM: `qemu-i386` or `qemu-i386-static` (e.g., `sudo apt install qemu-user-static`)
-- `sudo` for `make run`/`make service` (BOOTP/TFTP use privileged ports)
+### x86_64 (Intel/AMD)
+
+`netinstall-cli` is an x86 binary — it runs natively on x86_64.  No QEMU is needed.
+
+```sh
+# Debian/Ubuntu
+sudo apt install make wget unzip
+
+# Alpine
+apk add make wget unzip
+
+# Fedora
+sudo dnf install make wget unzip
+```
+
+`sudo` is required for `make run`/`make service` (BOOTP/TFTP use privileged ports).
+
+### aarch64 (ARM)
+
+`netinstall-cli` is an x86 binary and cannot run natively on aarch64.  The Makefile uses **user-mode QEMU** to emulate i386 syscalls directly in user space — no full VM is needed.
+
+```sh
+# Debian/Ubuntu
+sudo apt install make wget unzip qemu-user-static
+
+# Alpine
+apk add make wget unzip qemu-i386
+
+# Fedora
+sudo dnf install make wget unzip qemu-user-static
+```
+
+`sudo` is required for `make run`/`make service` (BOOTP/TFTP use privileged ports).
+
+The Makefile auto-detects in priority order: `./i386` (container bundled binary), then `qemu-i386-static`, then `qemu-i386`.  If none are found, it prints an install hint and exits.
+
+This is the same mechanism the OCI container image uses — during image build, a `qemu-i386` binary is bundled as `./i386` inside the image.  You only need to install it manually when running `make` directly (not via the container).
+
+> This is distinct from macOS, which boots a full `qemu-system-x86_64` VM — see [macOS VM Details](#macos-vm-details).
+
+## Interactive Wizard (`mknetinstall`)
+
+`mknetinstall` is a POSIX shell script wizard that guides you through all choices and then invokes `make` with the right variables.  It works on macOS and Linux — run it directly from the project directory, or install it to your PATH:
+
+```sh
+./mknetinstall
+
+# Or install to PATH first:
+make mknetinstall && mknetinstall
+```
+
+The wizard walks through these steps in order:
+
+1. **Platform detection** — detects OS and CPU architecture, checks that required tools are installed, prints install hints if anything is missing
+2. **Version channel** — choose `stable`, `testing`, `long-term`, `development`, or pin a specific version string (e.g., `7.22`)
+3. **Target architecture** — one or more (e.g., `arm64`, or `arm arm64` for a mixed fleet)
+4. **Packages** — downloads the selected packages first, then lists what's available so you can pick by number (WiFi driver note is shown here)
+5. **Device mode** *(7.22+ only)* — `Automatic`, `Advanced`, `RoSE`, `Home`, or `Do not change`; see [First-Boot Script](#first-boot-script)
+6. **Install config** — reset to default config (`-r`) or empty config (`-e`)
+7. **Network interface** — auto-detects available interfaces and lets you select or type one
+8. **Run mode** — run once (`make run`) or loop as a service (`make service`)
+9. **Summary & confirmation** — shows the exact `make` command before running it
+
+Non-interactive use — pass options to skip prompts:
+
+```sh
+./mknetinstall --arch arm64 --channel stable --dry-run
+./mknetinstall --arch arm64 --pkgs "container wifi-qcom-ac" --iface en5 --run
+```
+
+Use `./mknetinstall --help` for the full option list.
+
+**On macOS**, the wizard's `make run`/`make service` delegate to a QEMU system VM — see [macOS VM Details](#macos-vm-details).  The wizard checks for `qemu-system-x86_64` at startup and will tell you to `brew install qemu` if it's missing.  On Apple Silicon (aarch64), the VM emulates x86_64 in software (QEMU TCG) — slightly slower than on Intel Mac, but fine for netinstall's modest workload.
+
+**On Linux aarch64**, the wizard's `make run` uses `qemu-i386` user-mode emulation — see [Linux Prerequisites](#linux-prerequisites).  The wizard prints a missing-tool message with the right `apt`/`apk`/`dnf` command if it isn't installed.
+
+**On x86_64 Linux**, `netinstall-cli` runs natively — no QEMU is needed at all.
 
 ## Why a Makefile?
 

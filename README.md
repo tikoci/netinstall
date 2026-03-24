@@ -68,12 +68,17 @@ unzip netinstall.zip && cd netinstall-master
 brew install qemu crane make wget
 ```
 
-- `qemu` — provides `qemu-system-x86_64` for the VM
-- `crane` — extracts the Alpine rootfs when building the VM (needed once, cached after)
-- `make` — Homebrew's GNU make (macOS ships an older version that also works, but Homebrew's is recommended)
-- `wget` — for downloading RouterOS packages
+See [macOS VM Details](GUIDE.md#macos-vm-details) in the Configuration Guide for what each tool does.
 
-#### Run netinstall
+#### Run the interactive wizard
+
+```sh
+./mknetinstall
+```
+
+The wizard guides you through architecture, package, and interface selection.  See [Interactive Wizard](https://github.com/tikoci/netinstall?tab=readme-ov-file#interactive-wizard) for details.
+
+#### Run netinstall directly
 
 Set `IFACE` to the macOS interface your target device is connected to (e.g., `en5` for a USB ethernet adapter):
 
@@ -81,13 +86,9 @@ Set `IFACE` to the macOS interface your target device is connected to (e.g., `en
 sudo make run ARCH=arm64 PKGS="container wifi-qcom-ac" IFACE=en5
 ```
 
-The first run builds the VM components (Alpine kernel + initramfs), which are cached in `downloads/`.  Subsequent runs start in seconds.  Your macOS password is required for `sudo` (vmnet-bridged networking needs root).
-
 > [!IMPORTANT]
 >
 > **To exit the QEMU VM, press <kbd>Ctrl-A</kbd> then <kbd>X</kbd>** (the QEMU monitor escape sequence).  <kbd>Ctrl-C</kbd> does **not** work — this is intentional, since interrupting `netinstall` mid-flash could leave a device in a bad state.  The VM shuts down automatically after a single `make run` completes.
-
-`make download` works without QEMU — it only downloads packages.  QEMU is only needed for `make run` and `make service`.  For details on how the VM works under the hood, see the [Configuration Guide](GUIDE.md#macos-vm-details).
 
 ## RouterOS `/container` Setup
 
