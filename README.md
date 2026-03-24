@@ -4,9 +4,9 @@ Automates MikroTik device flashing with `netinstall-cli`.  Downloads the right p
 
 Works three ways:
 
+- **As a MikroTik `/container`** — an OCI image runs `netinstall` as a service, no PC needed
 - **On macOS** — runs `netinstall` via a lightweight QEMU VM with bridged networking (MikroTik only provides a Linux binary — this project makes it work on Mac)
 - **On Linux** — runs `netinstall-cli` directly (or via QEMU user-mode on ARM/ARM64)
-- **As a MikroTik `/container`** — an OCI image runs `netinstall` as a service, no PC needed
 
 Source: [tikoci/netinstall](https://github.com/tikoci/netinstall) — DockerHub: [ammo74/netinstall](https://hub.docker.com/r/ammo74/netinstall) — License: CC0 1.0
 
