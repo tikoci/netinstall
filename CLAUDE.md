@@ -145,7 +145,7 @@ Architecture mapping (RouterOS → Docker platform):
 
 ## `tools/container-manager.sh` — Container Provisioning & Lifecycle
 
-Shell script that provisions and manages the netinstall container on a RouterOS device via REST API. Requires `curl`, `jq`, and **RouterOS 7.22+** (uses 7.22+ REST API property names). The Makefile and container images themselves work on any RouterOS version that supports `/container`. Creates VETH, bridge, bridge ports, firewall list member, env vars, and container. Also provides start/stop/status/logs/remove lifecycle commands.
+Shell script that provisions and manages the netinstall container on a RouterOS device via REST API. Requires `curl`, `jq`, and **RouterOS 7.20+** (uses 7.20+ REST API property names). The Makefile and container images themselves work on any RouterOS version that supports `/container`. Creates VETH, bridge, bridge ports, firewall list member, env vars, and container. Also provides start/stop/status/logs/remove lifecycle commands.
 
 Key behaviors:
 - **Image handling**: Checks for pre-built image in `images/`, builds with `make image-platform` if crane is available, otherwise errors with suggestion to run `make image`.
@@ -160,10 +160,10 @@ Key behaviors:
 The REST API (`/rest/` prefix) has several differences from CLI syntax that trip up scripts:
 
 - **HTTP verbs**: PUT = create new resource, PATCH = update existing, POST = run command, DELETE = remove
-- **Property names differ from CLI (pre-7.22)**:
-  - Container `envlists` (REST/7.22+ CLI) vs `envlist` (pre-7.22 CLI) — note the trailing `s`
-  - Env list `list` (REST/7.22+ CLI) vs `name` (pre-7.22 CLI) — the field that names the env list
-  - RouterOS 7.22 unified most REST and CLI property names; `tools/container-manager.sh` requires 7.22+
+- **Property names changed at 7.20** (both CLI and REST — they always match on a given version):
+  - `/container/envs` list name field: `name=` (pre-7.20) → `list=` (7.20+)
+  - `/container` env reference: `envlist=` (pre-7.20) → `envlists=` (7.20+)
+  - `tools/container-manager.sh` requires 7.20+
 - **Container status**: Use `.running` field (`"true"`/`"false"` as strings). There is no `.stopped` field.
 - **RouterOS 7.21+**: Container interface names match the VETH name. Set `IFACE` env var to the VETH name (e.g., `veth-netinstall`).
 - **Container delete**: Must fully stop first. A delete while still stopping returns HTTP 400. Poll `.running` and retry.
@@ -221,7 +221,7 @@ Contains Dockerfiles and scripts for building custom OCI images with pre-downloa
 
 ## MikroTik `/container` Quick Reference
 
-Key environment variables for RouterOS `/container/envs` (7.22+ CLI syntax):
+Key environment variables for RouterOS `/container/envs` (7.20+ CLI syntax):
 
 ```routeros
 /container envs add key=ARCH     list=NETINSTALL value=arm64
@@ -230,7 +230,7 @@ Key environment variables for RouterOS `/container/envs` (7.22+ CLI syntax):
 /container envs add key=OPTS     list=NETINSTALL value="-b -r"
 /container envs add key=IFACE    list=NETINSTALL value=veth-netinstall
 ```
-Note: The env list field name changed in RouterOS 7.22 — pre-7.22 CLI used `name=`, 7.22+ CLI and REST API both use `list=`.
+Note: The env list field name changed in RouterOS 7.20 — pre-7.20 CLI used `name=`, 7.20+ CLI and REST API both use `list=`.
 
 Start: `/container/start [find tag~"netinstall"]`
 

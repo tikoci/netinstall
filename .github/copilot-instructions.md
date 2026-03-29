@@ -79,7 +79,7 @@ Architecture mapping (RouterOS → Docker platform): `arm`→`linux/arm/v7`, `ar
 
 Provisions and manages the netinstall container stack on a RouterOS device via REST API: creates VETH, bridge, environment variables, builds image, uploads via SCP, creates container.
 
-Requires RouterOS 7.20+ (uses `list` as REST API `envs` property, older versions used `name`). Key REST API notes:
+Requires RouterOS 7.20+ (env list field name changed at 7.20 — `name=` → `list=` — both CLI and REST changed together). Key REST API notes:
 - HTTP verbs: PUT = create, PATCH = update, POST = command, DELETE = remove
 - Container status: use `.running` field (`"true"`/`"false"` as strings)
 - Container delete must fully stop first; poll `.running` and retry
@@ -101,7 +101,7 @@ The container reads config from `/container/envs` (7.20+ CLI syntax):
 /container envs add key=IFACE    list=NETINSTALL value=veth-netinstall
 ```
 
-Note: env list field name changed in RouterOS 7.20 — pre-7.20 CLI used `name=`, 7.20+ and REST API use `list=`.
+Note: env list field name changed in RouterOS 7.20 — pre-7.20 used `name=`, 7.20+ uses `list=` (both CLI and REST — property names always match on a given version).
 
 Images on DockerHub: `ammo74/netinstall:latest`
 GHCR: `ghcr.io/tikoci/netinstall`
