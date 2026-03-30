@@ -2,6 +2,27 @@ name: build-and-push
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Additional image tag (e.g., "all-arch", "arm64-wifi"). Leave empty to only push "latest".'
+        required: false
+        default: ''
+      default_arch:
+        description: 'Default ARCH env for tagged image (e.g., "arm arm64 mipsbe mmips smips ppc tile x86")'
+        required: false
+        default: ''
+      default_pkgs:
+        description: 'Default PKGS env for tagged image (e.g., "wifi-qcom-ac wifi-qcom")'
+        required: false
+        default: ''
+      default_channel:
+        description: 'Default CHANNEL env for tagged image (e.g., "stable", "testing")'
+        required: false
+        default: ''
+      default_opts:
+        description: 'Default OPTS env for tagged image (e.g., "-b -r")'
+        required: false
+        default: ''
 # push:
 #   paths:
 #     - Makefile
@@ -39,10 +60,46 @@ jobs:
       run: make image
     -
       name: Push to DockerHub
-      run: make image-push IMAGE=ammo74/netinstall
+      run: |
+        make image-push IMAGE=ammo74/netinstall
+        crane tag ammo74/netinstall:latest "sha-$(echo "$GITHUB_SHA" | cut -c1-7)"
     -
       name: Push to GHCR
-      run: make image-push IMAGE=ghcr.io/${{ github.repository }}
+      run: |
+        make image-push IMAGE=ghcr.io/${{ github.repository }}
+        crane tag "ghcr.io/${{ github.repository }}:latest" "sha-$(echo "$GITHUB_SHA" | cut -c1-7)"
+    -
+      name: Push tagged variants
+      if: ${{ inputs.tag != '' }}
+      env:
+        TAG: ${{ inputs.tag }}
+        DEFAULT_ARCH: ${{ inputs.default_arch }}
+        DEFAULT_PKGS: ${{ inputs.default_pkgs }}
+        DEFAULT_CHANNEL: ${{ inputs.default_channel }}
+        DEFAULT_OPTS: ${{ inputs.default_opts }}
+      run: |
+        for IMAGE in "ammo74/netinstall" "ghcr.io/${{ github.repository }}"; do
+          MANIFEST_ARGS=""
+          for plat in linux/arm64 linux/arm/v7 linux/amd64; do
+            ptag=$(echo "$plat" | tr '/' '-')
+            crane copy "$IMAGE:$ptag" "$IMAGE:${ptag}-${TAG}"
+            if [ -n "$DEFAULT_ARCH" ]; then
+              crane mutate --env "ARCH=$DEFAULT_ARCH" "$IMAGE:${ptag}-${TAG}"
+            fi
+            if [ -n "$DEFAULT_PKGS" ]; then
+              crane mutate --env "PKGS=$DEFAULT_PKGS" "$IMAGE:${ptag}-${TAG}"
+            fi
+            if [ -n "$DEFAULT_CHANNEL" ]; then
+              crane mutate --env "CHANNEL=$DEFAULT_CHANNEL" "$IMAGE:${ptag}-${TAG}"
+            fi
+            if [ -n "$DEFAULT_OPTS" ]; then
+              crane mutate --env "OPTS=$DEFAULT_OPTS" "$IMAGE:${ptag}-${TAG}"
+            fi
+            MANIFEST_ARGS="$MANIFEST_ARGS -m $IMAGE:${ptag}-${TAG}"
+          done
+          crane index append -t "$IMAGE:$TAG" $MANIFEST_ARGS
+          echo "Pushed $IMAGE:$TAG"
+        done
     -
       name: Update DockerHub description
       uses: peter-evans/dockerhub-description@v4
