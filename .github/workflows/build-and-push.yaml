@@ -28,6 +28,9 @@ on:
 #     - Makefile
 #     - '.github/workflows/build-and-push.yaml'
 
+concurrency:
+  group: build-and-push
+
 permissions:
   packages: write
   contents: read
@@ -69,6 +72,16 @@ jobs:
         make image-push IMAGE=ghcr.io/${{ github.repository }}
         crane tag "ghcr.io/${{ github.repository }}:latest" "sha-$(echo "$GITHUB_SHA" | cut -c1-7)"
     -
+      name: Validate tag format
+      if: ${{ inputs.tag != '' }}
+      env:
+        TAG: ${{ inputs.tag }}
+      run: |
+        if ! printf '%s' "$TAG" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$'; then
+          echo "::error::Invalid tag '$TAG' — must match [a-zA-Z0-9][a-zA-Z0-9._-]* (max 128 chars)"
+          exit 1
+        fi
+    -
       name: Push tagged variants
       if: ${{ inputs.tag != '' }}
       env:
@@ -78,6 +91,7 @@ jobs:
         DEFAULT_CHANNEL: ${{ inputs.default_channel }}
         DEFAULT_OPTS: ${{ inputs.default_opts }}
       run: |
+        set -f
         for IMAGE in "ammo74/netinstall" "ghcr.io/${{ github.repository }}"; do
           MANIFEST_ARGS=""
           for plat in linux/arm64 linux/arm/v7 linux/amd64; do
