@@ -16,6 +16,10 @@ ifndef VER_NETINSTALL
 VER_NETINSTALL := $(call channel_ver,$(CHANNEL))
 endif
 DLDIR ?= downloads
+# NOTE: ARCH=x86 is not supported — MikroTik x86 .npk files omit the architecture
+# suffix (e.g. routeros-7.22.npk, not routeros-7.22-x86.npk).  The pattern below
+# would generate routeros-VER-x86.npk which doesn't exist on download.mikrotik.com.
+# x86 RouterOS devices (including CHR) rarely need netinstall.
 ROUTEROS_FILES := $(foreach arch,$(ARCH),$(DLDIR)/routeros-$(VER)-$(arch).npk)
 PKGS_FILES := $(foreach arch,$(ARCH),$(foreach pkg,$(PKGS),$(DLDIR)/$(pkg)-$(VER)-$(arch).npk))
 ALL_PACKAGES_ZIPS := $(foreach arch,$(ARCH),$(DLDIR)/all_packages-$(arch)-$(VER).zip)
